@@ -122,6 +122,7 @@ async def fetch_all_users(fetch_func, tweet_id, max_pages=10):
 async def fetch_follower_ids(client, screen_name, max_pages=10):
     """Fetch up to max_pages * 5000 follower IDs for the given screen name."""
     ids = set()
+    error = None
     try:
         result = await client.get_followers_ids(screen_name=screen_name, count=5000)
         for fid in result:
@@ -137,9 +138,9 @@ async def fetch_follower_ids(client, screen_name, max_pages=10):
                 pages += 1
             except Exception:
                 break
-    except Exception:
-        pass
-    return ids
+    except Exception as e:
+        error = str(e)
+    return ids, error
 
 
 async def pick_winners_async(tweet_url, num_winners, require_retweet, require_follow):
@@ -158,7 +159,8 @@ async def pick_winners_async(tweet_url, num_winners, require_retweet, require_fo
 
     errors = []
     if require_follow and author_username:
-        follower_ids = await fetch_follower_ids(client, author_username)
+        follower_ids, fid_error = await fetch_follower_ids(client, author_username)
+        errors.append(f'[debug] follower_ids fetched: {len(follower_ids)}, error: {fid_error}, sample retweeter id: {retweeters[0]["id"] if retweeters else "none"}, in_followers: {str(retweeters[0]["id"]) in follower_ids if retweeters else "n/a"}')
         if follower_ids:
             retweeters = [u for u in retweeters if str(u['id']) in follower_ids]
         else:
