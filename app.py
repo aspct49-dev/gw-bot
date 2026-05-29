@@ -14,6 +14,9 @@ from youtube_comment_downloader import YoutubeCommentDownloader, SORT_BY_RECENT
 
 load_dotenv()
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+COOKIES_FILE = os.path.join(BASE_DIR, 'cookies.json')
+
 # Patch ClientTransaction.init to gracefully handle Twitter JS parsing failures.
 # Twitter occasionally changes their frontend JS structure, breaking the key extraction.
 # When that happens, we fall back to dummy values so API requests still go out.
@@ -64,15 +67,23 @@ def _patched_guest_user_init(self, client, data, *args, **kwargs):
     return _orig_guest_user_init(self, client, _make_safe(data), *args, **kwargs)
 twikit.guest.user.User.__init__ = _patched_guest_user_init
 
-app = Flask(__name__, static_folder='prototype', static_url_path='')
+app = Flask(__name__, static_folder=os.path.join(BASE_DIR, 'prototype'), static_url_path='')
 app.secret_key = os.getenv('SECRET_KEY') or os.urandom(24)
-
-COOKIES_FILE = 'cookies.json'
 
 
 def make_client():
     client = Client('en-US')
-    client.load_cookies(COOKIES_FILE)
+    if os.path.exists(COOKIES_FILE):
+        client.load_cookies(COOKIES_FILE)
+    else:
+        cookies_str = os.getenv('TWITTER_COOKIES', '')
+        if not cookies_str:
+            raise RuntimeError('No Twitter cookies found. Set TWITTER_COOKIES env var.')
+        # Write to /tmp so twikit's load_cookies can read it
+        tmp = '/tmp/cookies.json'
+        with open(tmp, 'w') as f:
+            f.write(cookies_str)
+        client.load_cookies(tmp)
     return client
 
 
@@ -183,7 +194,7 @@ def format_comment(c):
 
 @app.route('/')
 def index():
-    return send_from_directory('prototype', 'Giveaway Picker.html')
+    return send_from_directory(os.path.join(BASE_DIR, 'prototype'), 'Giveaway Picker.html')
 
 
 @app.route('/api/pick', methods=['POST'])
