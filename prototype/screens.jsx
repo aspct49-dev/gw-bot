@@ -1,0 +1,240 @@
+// screens.jsx — the four app screens. Presentational; App owns flow + data.
+
+const { useState: useStateS } = React;
+
+/* ─────────────── Twitter form ─────────────── */
+function TwitterForm({ error, onSubmit }) {
+  const [url, setUrl] = useStateS('');
+  const [num, setNum] = useStateS(1);
+  const [retweet, setRetweet] = useStateS(true);
+  const [follow, setFollow] = useStateS(false);
+
+  return (
+    <div className="screen">
+      <div className="head">
+        <h1 className="title">Pick winners from a post</h1>
+        <p className="subtitle">Randomly draw winners from a post&rsquo;s reposts and followers — fair, fast, and verifiable.</p>
+      </div>
+
+      {error && <div className="alert error">{error}</div>}
+
+      <Field label="Post URL">
+        <TextInput value={url} onChange={(e) => setUrl(e.target.value)}
+                   placeholder="https://x.com/user/status/123456789" />
+      </Field>
+
+      <Field label="Number of winners">
+        <NumberInput value={num} min={1} max={50}
+                     onChange={(e) => setNum(e.target.value)} />
+      </Field>
+
+      <div className="checks">
+        <div className="group-label">Entry requirements</div>
+        <Checkbox checked={retweet} onChange={setRetweet}>Must have reposted the post</Checkbox>
+        <Checkbox checked={follow} onChange={setFollow}>Must follow the post author</Checkbox>
+        <p className="help">Follow checks run slower due to rate limits.</p>
+      </div>
+
+      <button className="btn btn-primary" style={{ marginTop: 22 }}
+              onClick={() => onSubmit({ url, num: Number(num) || 1, retweet, follow })}>
+        Pick winners <Arrow />
+      </button>
+    </div>
+  );
+}
+
+/* ─────────────── Twitter results ─────────────── */
+function TwitterResults({ data, onBack, onReroll }) {
+  const { url, winners, retweeters, eligible, retweet, follow, author } = data;
+  const [marked, setMarked] = useStateS({});
+  const anyMarked = Object.values(marked).some(Boolean);
+  const canReroll = data.remaining && data.remaining.length > 0;
+
+  const toggle = (id) => setMarked((m) => ({ ...m, [id]: !m[id] }));
+  const doReroll = () => {
+    const ids = winners.filter((w) => marked[w.id]).map((w) => w.id);
+    onReroll(ids);
+    setMarked({});
+  };
+
+  return (
+    <div className="screen">
+      <button className="back-link" onClick={onBack}><Arrow dir="left" /> New draw</button>
+      <div className="head">
+        <div className="eyebrow">Results</div>
+        <h1 className="title">{winners.length} winner{winners.length !== 1 ? 's' : ''} drawn</h1>
+        <p className="subtitle">From <a href={url} target="_blank" rel="noreferrer">{url}</a></p>
+      </div>
+
+      <div className="stats">
+        {retweet && (
+          <div className="stat"><div className="k">Reposters</div><div className="v">{retweeters.toLocaleString()}</div></div>
+        )}
+        <div className="stat"><div className="k">Eligible</div><div className="v">{eligible.toLocaleString()}</div></div>
+      </div>
+
+      <div className="criteria">
+        {retweet && <span className="pill"><span className="tick" />Reposted</span>}
+        {follow && <span className="pill"><span className="tick" />Follows @{author}</span>}
+        {!retweet && !follow && <span className="pill"><span className="tick" />All participants</span>}
+      </div>
+
+      {winners.length ? (
+        <>
+          <div className="section-label"><h2>Winners</h2></div>
+          {canReroll && <p className="reroll-hint">Check any winner you want to swap out, then reroll just those slots.</p>}
+          <ul className="winners">
+            {winners.map((w, i) => (
+              <li className="winner" key={w.id} data-marked={canReroll && marked[w.id] ? '1' : '0'}>
+                <span className="wnum">{i + 1}</span>
+                <div className="winner-body">
+                  <div className="winner-name">{w.name}</div>
+                  <div className="winner-handle">
+                    <a href={`https://twitter.com/${w.username}`} target="_blank" rel="noreferrer">@{w.username}</a>
+                  </div>
+                </div>
+                {canReroll && (
+                  <span className="rr" data-on={marked[w.id] ? '1' : '0'}
+                        onClick={() => toggle(w.id)} role="checkbox"
+                        aria-checked={!!marked[w.id]} title="Reroll this winner" />
+                )}
+              </li>
+            ))}
+          </ul>
+          <div className="btn-row">
+            <button className="btn btn-outline" onClick={onBack}>New draw</button>
+            {canReroll
+              ? <button className="btn btn-primary" disabled={!anyMarked} onClick={doReroll}>Reroll selected</button>
+              : <button className="btn btn-primary" onClick={onBack}>Run another draw <Arrow /></button>
+            }
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="empty">
+            <div className="emoji">[ no eligible entries ]</div>
+            <p>Try relaxing the requirements or wait for more engagement.</p>
+          </div>
+          <button className="btn btn-primary" onClick={onBack}>Run another draw <Arrow /></button>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────── YouTube form ─────────────── */
+function YoutubeForm({ error, onSubmit }) {
+  const [url, setUrl] = useStateS('');
+  const [num, setNum] = useStateS(1);
+  const [keyword, setKeyword] = useStateS('');
+  const [maxC, setMaxC] = useStateS(500);
+
+  return (
+    <div className="screen">
+      <div className="head">
+        <h1 className="title">Pick winners from comments</h1>
+        <p className="subtitle">Randomly draw winners from a YouTube video&rsquo;s comment section.</p>
+      </div>
+
+      {error && <div className="alert error">{error}</div>}
+
+      <Field label="YouTube video URL">
+        <TextInput value={url} onChange={(e) => setUrl(e.target.value)}
+                   placeholder="https://www.youtube.com/watch?v=..." />
+      </Field>
+
+      <Field label="Number of winners">
+        <NumberInput value={num} min={1} max={50}
+                     onChange={(e) => setNum(e.target.value)} />
+      </Field>
+
+      <Field label="Keyword filter" hint="Optional — only draw from comments containing this word.">
+        <TextInput value={keyword} onChange={(e) => setKeyword(e.target.value)}
+                   placeholder="e.g. subscribe, enter, giveaway" />
+      </Field>
+
+      <Field label="Max comments to scan" hint="Higher values cover more comments but take longer.">
+        <NumberInput value={maxC} min={10} max={10000}
+                     onChange={(e) => setMaxC(e.target.value)} />
+      </Field>
+
+      <button className="btn btn-primary" style={{ marginTop: 4 }}
+              onClick={() => onSubmit({ url, num: Number(num) || 1, keyword: keyword.trim(), maxC })}>
+        Pick winners <Arrow />
+      </button>
+    </div>
+  );
+}
+
+/* ─────────────── YouTube results ─────────────── */
+function YoutubeResults({ data, onBack, onReroll }) {
+  const { url, winners, commenters, keyword } = data;
+  const [marked, setMarked] = useStateS({});
+  const anyMarked = Object.values(marked).some(Boolean);
+  const canReroll = data.remaining && data.remaining.length > 0;
+
+  const toggle = (id) => setMarked((m) => ({ ...m, [id]: !m[id] }));
+
+  const doReroll = () => {
+    const ids = winners.filter((w) => marked[w.id]).map((w) => w.id);
+    onReroll(ids);
+    setMarked({});
+  };
+
+  return (
+    <div className="screen">
+      <button className="back-link" onClick={onBack}><Arrow dir="left" /> New draw</button>
+      <div className="head">
+        <div className="eyebrow">Results</div>
+        <h1 className="title">{winners.length} winner{winners.length !== 1 ? 's' : ''} drawn</h1>
+        <p className="subtitle">From <a href={url} target="_blank" rel="noreferrer">{url}</a></p>
+      </div>
+
+      <div className="stats">
+        <div className="stat"><div className="k">Unique commenters</div><div className="v">{commenters.toLocaleString()}</div></div>
+        {keyword && <div className="stat"><div className="k">Keyword</div><div className="v small">&ldquo;{keyword}&rdquo;</div></div>}
+      </div>
+
+      {winners.length ? (
+        <>
+          <div className="section-label"><h2>Winners</h2></div>
+          {canReroll && <p className="reroll-hint">Check any winner you want to swap out, then reroll just those slots.</p>}
+          <ul className="winners">
+            {winners.map((w, i) => (
+              <li className="winner" key={w.id} data-marked={marked[w.id] ? '1' : '0'}>
+                <span className="wnum">{i + 1}</span>
+                <div className="winner-body">
+                  <div className="winner-name">{w.author}</div>
+                  <div className="winner-comment">&ldquo;{w.text}&rdquo;</div>
+                  <div className="winner-meta">{w.time}<span className="sep">·</span>{w.votes} likes</div>
+                </div>
+                {canReroll && (
+                  <span className="rr" data-on={marked[w.id] ? '1' : '0'}
+                        onClick={() => toggle(w.id)} role="checkbox"
+                        aria-checked={!!marked[w.id]} title="Reroll this winner" />
+                )}
+              </li>
+            ))}
+          </ul>
+          <div className="btn-row">
+            <button className="btn btn-outline" onClick={onBack}>New draw</button>
+            {canReroll
+              ? <button className="btn btn-primary" disabled={!anyMarked} onClick={doReroll}>Reroll selected</button>
+              : <button className="btn btn-primary" onClick={onBack}>Run another draw <Arrow /></button>
+            }
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="empty">
+            <div className="emoji">[ no matching comments ]</div>
+            <p>Try a different keyword or another video.</p>
+          </div>
+          <button className="btn btn-primary" onClick={onBack}>Try again <Arrow /></button>
+        </>
+      )}
+    </div>
+  );
+}
+
+Object.assign(window, { TwitterForm, TwitterResults, YoutubeForm, YoutubeResults });
