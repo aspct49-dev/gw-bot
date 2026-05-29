@@ -76,13 +76,13 @@ def make_client():
     if os.path.exists(COOKIES_FILE):
         client.load_cookies(COOKIES_FILE)
     else:
-        cookies_str = os.getenv('TWITTER_COOKIES', '')
+        cookies_str = os.getenv('TWITTER_COOKIES', '').strip().strip('"\'')
         if not cookies_str:
             raise RuntimeError('No Twitter cookies found. Set TWITTER_COOKIES env var.')
-        # Write to /tmp so twikit's load_cookies can read it
         tmp = '/tmp/cookies.json'
         with open(tmp, 'w') as f:
-            f.write(cookies_str)
+            # Re-serialize to ensure clean JSON regardless of how the env var was pasted
+            json.dump(json.loads(cookies_str), f)
         client.load_cookies(tmp)
     return client
 
