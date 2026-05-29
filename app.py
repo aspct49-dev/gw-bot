@@ -192,6 +192,17 @@ def format_comment(c):
     }
 
 
+@app.route('/api/debug-env')
+def debug_env():
+    val = os.getenv('TWITTER_COOKIES', '')
+    return jsonify(
+        twitter_cookies_set=bool(val),
+        twitter_cookies_length=len(val),
+        twitter_cookies_preview=val[:6] + '...' if val else '(empty)',
+        secret_key_set=bool(os.getenv('SECRET_KEY')),
+    )
+
+
 @app.route('/')
 def index():
     return send_from_directory(os.path.join(BASE_DIR, 'prototype'), 'Giveaway Picker.html')
