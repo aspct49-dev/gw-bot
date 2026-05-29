@@ -119,22 +119,23 @@ async def fetch_all_users(fetch_func, tweet_id, max_pages=10):
     return users
 
 
-async def fetch_follower_ids(client, screen_name, max_pages=10):
-    """Fetch up to max_pages * 5000 follower IDs for the given screen name."""
+async def fetch_follower_ids(client, screen_name, max_pages=20):
+    """Fetch follower IDs via GraphQL (cookie-auth friendly)."""
     ids = set()
     error = None
     try:
-        result = await client.get_followers_ids(screen_name=screen_name, count=5000)
-        for fid in result:
-            ids.add(str(fid))
+        author = await client.get_user_by_screen_name(screen_name)
+        result = await author.get_followers(count=200)
+        for user in result:
+            ids.add(str(user.id))
         pages = 1
         while pages < max_pages:
             try:
                 result = await result.next()
                 if not result:
                     break
-                for fid in result:
-                    ids.add(str(fid))
+                for user in result:
+                    ids.add(str(user.id))
                 pages += 1
             except Exception:
                 break
