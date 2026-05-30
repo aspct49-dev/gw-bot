@@ -273,7 +273,6 @@ body{font-family:'Plus Jakarta Sans',-apple-system,sans-serif;background:#eef2fb
 .logo{font-size:22px;font-weight:800;color:#2454d6;letter-spacing:-.02em;margin-bottom:12px}
 .draw-meta{font-size:13.5px;color:#64748b;line-height:1.7}
 .draw-meta a{color:#2454d6;text-decoration:none}
-.draw-meta a:hover{text-decoration:underline}
 .meta-pills{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:10px}
 .meta-pill{background:#fff;border:1px solid #dde3f0;border-radius:999px;padding:4px 13px;font-size:12px;font-weight:600;color:#64748b}
 .section-title{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#94a3b8;margin-bottom:16px}
@@ -286,14 +285,12 @@ body{font-family:'Plus Jakarta Sans',-apple-system,sans-serif;background:#eef2fb
 .winner-name{font-size:15px;font-weight:700;color:#0f1c3f;letter-spacing:-.01em;margin-bottom:2px}
 .winner-handle{font-family:'IBM Plex Mono',monospace;font-size:12px;color:#2454d6;margin-bottom:8px}
 .winner-bio{font-size:12px;color:#64748b;line-height:1.5;margin-bottom:6px;word-break:break-word}
-.winner-location{font-size:11.5px;color:#94a3b8;display:flex;align-items:center;gap:4px}
-.profile-btn{display:block;margin:12px 16px 14px;padding:9px;background:#f0f4ff;border:1.5px solid #c7d2f5;border-radius:10px;text-align:center;font-size:13px;font-weight:600;color:#2454d6;text-decoration:none;transition:background .2s}
-.profile-btn:hover{background:#e0e8ff}
+.winner-location{font-size:11.5px;color:#94a3b8}
+.profile-btn{display:block;margin:12px 16px 14px;padding:9px;background:#f0f4ff;border:1.5px solid #c7d2f5;border-radius:10px;text-align:center;font-size:13px;font-weight:600;color:#2454d6;text-decoration:none}
 .fair{background:#fff;border-radius:14px;padding:18px 20px;box-shadow:0 2px 12px rgba(15,35,100,.07);margin-bottom:24px}
-.fair-title{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#94a3b8;margin-bottom:12px;display:flex;align-items:center;gap:7px}
-.fair-title::before{content:'';width:8px;height:8px;border-radius:50%;background:#2454d6;opacity:.5;flex-shrink:0}
-.fair-row{display:flex;gap:10px;margin-bottom:8px;align-items:baseline}
-.fair-key{font-size:10.5px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;width:46px;flex-shrink:0}
+.fair-title{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#94a3b8;margin-bottom:12px}
+.fair-row{display:flex;gap:10px;margin-bottom:8px}
+.fair-key{font-size:10.5px;font-weight:700;color:#94a3b8;text-transform:uppercase;width:46px;flex-shrink:0}
 .fair-val{font-family:'IBM Plex Mono',monospace;font-size:10px;color:#64748b;word-break:break-all;background:#f8faff;padding:5px 8px;border-radius:6px;border:1px solid #dde3f0;flex:1;user-select:all}
 .fair-hint{font-size:11px;color:#94a3b8;margin-top:10px;line-height:1.55}
 .fair-hint a{color:#2454d6;text-decoration:none}
@@ -305,7 +302,7 @@ body{font-family:'Plus Jakarta Sans',-apple-system,sans-serif;background:#eef2fb
 <div class="page">
   <div class="header">
     <div class="logo">Doug's Giveaway Bot</div>
-    <div id="draw-meta"></div>
+    <div class="draw-meta" id="draw-meta"></div>
   </div>
   <div class="section-title">Winners</div>
   <div class="winners" id="winners"></div>
@@ -313,71 +310,64 @@ body{font-family:'Plus Jakarta Sans',-apple-system,sans-serif;background:#eef2fb
   <div class="footer">Powered by Doug's Giveaway Bot &mdash; Provably Fair</div>
 </div>
 <script>
-const DRAW = {{ data_json | safe }};
-const isYoutube = DRAW.type === 'youtube';
+var DRAW = {{ data_json | safe }};
+var isYoutube = DRAW.type === 'youtube';
 
-// Meta
-const meta = document.getElementById('draw-meta');
-if (isYoutube) {
-  const url = DRAW.video_url || '';
-  meta.innerHTML = \`<div>From <a href="\${url}" target="_blank" rel="noreferrer">\${url}</a></div>
-  <div class="meta-pills">
-    <span class="meta-pill">\${(DRAW.commenters||0).toLocaleString()} commenters</span>
-    <span class="meta-pill">\${DRAW.winners.length} winner\${DRAW.winners.length!==1?'s':''}</span>
-    \${DRAW.keyword ? \`<span class="meta-pill">Keyword: "\${DRAW.keyword}"</span>\` : ''}
-  </div>\`;
-} else {
-  const url = DRAW.tweet_url || '';
-  const author = DRAW.author || '';
-  meta.innerHTML = \`<div>From a post by <a href="https://twitter.com/\${author}" target="_blank" rel="noreferrer">@\${author}</a></div>
-  <div class="meta-pills">
-    <span class="meta-pill">\${(DRAW.eligible||0).toLocaleString()} eligible</span>
-    <span class="meta-pill">\${DRAW.winners.length} winner\${DRAW.winners.length!==1?'s':''}</span>
-    \${DRAW.retweet ? '<span class="meta-pill">✓ Reposted</span>' : ''}
-    \${DRAW.follow ? \`<span class="meta-pill">✓ Follows @\${author}</span>\` : ''}
-  </div>\`;
+function esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-// Winners
-const grid = document.getElementById('winners');
-DRAW.winners.forEach((w, i) => {
-  const card = document.createElement('div');
-  card.className = 'winner-card';
-  const name = w.name || w.author || '';
-  const handle = w.username || '';
-  const avatar = w.avatar || '';
-  const bio = w.bio || w.text || '';
-  const location = w.location || '';
-  const profileUrl = isYoutube
-    ? \`https://youtube.com/\${w.id || ''}\`
-    : \`https://twitter.com/\${handle}\`;
+var meta = document.getElementById('draw-meta');
+if (isYoutube) {
+  var url = DRAW.video_url || '';
+  var pills = '<span class="meta-pill">' + ((DRAW.commenters||0).toLocaleString()) + ' commenters</span>';
+  pills += '<span class="meta-pill">' + DRAW.winners.length + ' winner' + (DRAW.winners.length !== 1 ? 's' : '') + '</span>';
+  if (DRAW.keyword) pills += '<span class="meta-pill">Keyword: &ldquo;' + esc(DRAW.keyword) + '&rdquo;</span>';
+  meta.innerHTML = '<div>From <a href="' + esc(url) + '" target="_blank" rel="noreferrer">' + esc(url) + '</a></div><div class="meta-pills">' + pills + '</div>';
+} else {
+  var turl = DRAW.tweet_url || '';
+  var author = DRAW.author || '';
+  var pills = '<span class="meta-pill">' + ((DRAW.eligible||0).toLocaleString()) + ' eligible</span>';
+  pills += '<span class="meta-pill">' + DRAW.winners.length + ' winner' + (DRAW.winners.length !== 1 ? 's' : '') + '</span>';
+  if (DRAW.retweet) pills += '<span class="meta-pill">&#10003; Reposted</span>';
+  if (DRAW.follow) pills += '<span class="meta-pill">&#10003; Follows @' + esc(author) + '</span>';
+  meta.innerHTML = '<div>From a post by <a href="https://twitter.com/' + esc(author) + '" target="_blank" rel="noreferrer">@' + esc(author) + '</a></div><div class="meta-pills">' + pills + '</div>';
+}
 
-  card.innerHTML = \`
-    \${avatar
-      ? \`<img class="winner-avatar" src="\${avatar}" alt="\${name}" loading="lazy">\`
-      : \`<div class="winner-avatar-placeholder">👤</div>\`}
-    <div class="winner-info">
-      <div class="winner-num">#\${i+1}</div>
-      <div class="winner-name">\${name}</div>
-      \${handle ? \`<div class="winner-handle">@\${handle}</div>\` : ''}
-      \${bio ? \`<div class="winner-bio">"\${bio}"</div>\` : ''}
-      \${location ? \`<div class="winner-location">📍 \${location}</div>\` : ''}
-    </div>
-    <a class="profile-btn" href="\${profileUrl}" target="_blank" rel="noreferrer">View Profile ↗</a>
-  \`;
+var grid = document.getElementById('winners');
+DRAW.winners.forEach(function(w, i) {
+  var card = document.createElement('div');
+  card.className = 'winner-card';
+  var name = esc(w.name || w.author || '');
+  var handle = esc(w.username || '');
+  var avatar = esc(w.avatar || '');
+  var bio = esc(w.bio || w.text || '');
+  var location = esc(w.location || '');
+  var profileUrl = isYoutube
+    ? 'https://youtube.com/' + esc(w.id || '')
+    : 'https://twitter.com/' + handle;
+  var html = avatar
+    ? '<img class="winner-avatar" src="' + avatar + '" alt="' + name + '" loading="lazy">'
+    : '<div class="winner-avatar-placeholder">&#128100;</div>';
+  html += '<div class="winner-info">';
+  html += '<div class="winner-num">#' + (i + 1) + '</div>';
+  html += '<div class="winner-name">' + name + '</div>';
+  if (handle) html += '<div class="winner-handle">@' + handle + '</div>';
+  if (bio) html += '<div class="winner-bio">&ldquo;' + bio + '&rdquo;</div>';
+  if (location) html += '<div class="winner-location">&#128205; ' + location + '</div>';
+  html += '</div>';
+  html += '<a class="profile-btn" href="' + profileUrl + '" target="_blank" rel="noreferrer">View Profile &#8599;</a>';
+  card.innerHTML = html;
   grid.appendChild(card);
 });
 
-// Provably Fair
 if (DRAW.seed) {
-  document.getElementById('fair-section').innerHTML = \`
-    <div class="fair">
-      <div class="fair-title">Provably Fair</div>
-      <div class="fair-row"><span class="fair-key">Seed</span><code class="fair-val">\${DRAW.seed}</code></div>
-      <div class="fair-row"><span class="fair-key">SHA-256</span><code class="fair-val">\${DRAW.seed_hash}</code></div>
-      <p class="fair-hint">Verify: compute SHA-256(seed) and confirm it matches the hash above using any <a href="https://emn178.github.io/online-tools/sha256.html" target="_blank">online tool</a>.</p>
-    </div>
-  \`;
+  var fair = '<div class="fair"><div class="fair-title">Provably Fair</div>';
+  fair += '<div class="fair-row"><span class="fair-key">Seed</span><code class="fair-val">' + esc(DRAW.seed) + '</code></div>';
+  fair += '<div class="fair-row"><span class="fair-key">SHA-256</span><code class="fair-val">' + esc(DRAW.seed_hash) + '</code></div>';
+  fair += '<p class="fair-hint">Verify: compute SHA-256(seed) and confirm it matches the hash above using any <a href="https://emn178.github.io/online-tools/sha256.html" target="_blank">online tool</a>.</p>';
+  fair += '</div>';
+  document.getElementById('fair-section').innerHTML = fair;
 }
 </script>
 </body>
