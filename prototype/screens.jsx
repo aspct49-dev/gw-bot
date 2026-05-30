@@ -93,10 +93,7 @@ function TwitterResults({ data, onBack, onReroll }) {
                   <div className="winner-handle">
                     <a href={`https://twitter.com/${w.username}`} target="_blank" rel="noreferrer">@{w.username}</a>
                   </div>
-                  {w.reply
-                    ? <div className="winner-comment">"{w.reply}"</div>
-                    : w.bio && <div className="winner-bio">"{w.bio}"</div>
-                  }
+                  {w.bio && <div className="winner-bio">"{w.bio}"</div>}
                   {w.location && <div className="winner-location">📍 {w.location}</div>}
                 </div>
                 {canReroll && (

@@ -114,48 +114,9 @@ def _user_dict(user):
         'avatar': avatar,
         'bio': getattr(user, 'description', '') or '',
         'location': getattr(user, 'location', '') or '',
-        'reply': '',
     }
 
 
-async def fetch_reply_map(client, tweet_id, author_username=None, max_pages=10):
-    """Search conversation_id:{tweet_id} and return {user_id: reply_text}, error."""
-    reply_map = {}
-    error = None
-    try:
-        results = await client.search_tweet(
-            f'conversation_id:{tweet_id}', product='Latest', count=20
-        )
-        for tweet in results:
-            try:
-                uid = str(tweet.user.id)
-                if author_username and tweet.user.screen_name.lower() == author_username.lower():
-                    continue
-                if uid not in reply_map:
-                    reply_map[uid] = tweet.text or ''
-            except Exception:
-                continue
-        pages = 1
-        while pages < max_pages:
-            try:
-                results = await results.next()
-                if not results:
-                    break
-                for tweet in results:
-                    try:
-                        uid = str(tweet.user.id)
-                        if author_username and tweet.user.screen_name.lower() == author_username.lower():
-                            continue
-                        if uid not in reply_map:
-                            reply_map[uid] = tweet.text or ''
-                    except Exception:
-                        continue
-                pages += 1
-            except Exception:
-                break
-    except Exception as e:
-        error = str(e)
-    return reply_map, error
 
 
 async def fetch_all_users(fetch_func, tweet_id, max_pages=10):
@@ -213,11 +174,6 @@ async def pick_winners_async(tweet_url, num_winners, require_retweet, require_fo
     if not retweeters:
         raise ValueError('No participants found. Make sure the tweet has retweets.')
 
-    # Attach reply text to each retweeter
-    reply_map, reply_error = await fetch_reply_map(client, tweet_id, author_username)
-    for u in retweeters:
-        u['reply'] = reply_map.get(str(u['id']), '')
-
     num_retweeters = len(retweeters)
     server_seed, seed_hash = make_seed()
     seeded_shuffle(retweeters, server_seed)
@@ -242,7 +198,6 @@ async def pick_winners_async(tweet_url, num_winners, require_retweet, require_fo
         'errors': errors,
         'seed': server_seed,
         'seed_hash': seed_hash,
-        '_reply_debug': {'fetched': len(reply_map), 'error': reply_error},
     }
 
 
