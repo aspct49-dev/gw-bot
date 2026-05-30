@@ -10,6 +10,8 @@ from itertools import islice
 from flask import Flask, request, session, send_from_directory, jsonify
 from dotenv import load_dotenv
 from twikit import Client
+from twikit.client.gql import Endpoint
+from twikit.constants import USER_FEATURES
 import twikit.user
 import twikit.guest.user
 from twikit.x_client_transaction import ClientTransaction
@@ -265,6 +267,31 @@ def format_comment(c):
         'time': c.get('time', ''),
         'votes': votes,
     }
+
+
+@app.route('/api/debug-raw-user')
+def debug_raw_user():
+    screen_name = request.args.get('screen_name', '')
+    if not screen_name:
+        return jsonify(error='Pass ?screen_name=username')
+
+    async def fetch():
+        client = make_client()
+        variables = {'screen_name': screen_name, 'withSafetyModeUserFields': True}
+        return await client.gql.gql_get(Endpoint.USER_BY_SCREEN_NAME, variables, USER_FEATURES)
+
+    try:
+        raw = asyncio.run(fetch())
+        result = raw.get('data', {}).get('user', {}).get('result', {})
+        # Return top-level keys + everything except the large 'legacy' block
+        trimmed = {k: v for k, v in result.items() if k != 'legacy'}
+        legacy_country = {k: v for k, v in (result.get('legacy') or {}).items()
+                          if 'country' in k.lower() or 'location' in k.lower()}
+        return jsonify(top_level_keys=list(result.keys()),
+                       non_legacy=trimmed,
+                       legacy_location_fields=legacy_country)
+    except Exception as e:
+        return jsonify(error=str(e))
 
 
 @app.route('/api/debug-env')
