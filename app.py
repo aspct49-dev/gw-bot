@@ -282,6 +282,8 @@ def debug_raw_user():
 
     try:
         raw = asyncio.run(fetch())
+        if isinstance(raw, tuple):
+            raw = raw[0]
         result = raw.get('data', {}).get('user', {}).get('result', {})
         # Return top-level keys + everything except the large 'legacy' block
         trimmed = {k: v for k, v in result.items() if k != 'legacy'}
