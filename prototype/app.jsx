@@ -116,70 +116,40 @@ function App() {
   };
 
   // ── Share draw ──
-  const shareDraw = async () => {
-    setLoading({ label: 'Saving draw…' });
+  const _saveAndShare = async (payload, setter, existing) => {
     try {
       const res = await fetch('/api/save-draw', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'twitter',
-          tweet_url: twData.url,
-          author: twData.author,
-          winners: twData.winners,
-          eligible: twData.eligible,
-          retweeters: twData.retweeters,
-          retweet: twData.retweet,
-          follow: twData.follow,
-          seed: twData.seed,
-          seed_hash: twData.seedHash,
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (data.draw_id) {
-        const url = `${window.location.origin}/draw/${data.draw_id}`;
-        await navigator.clipboard.writeText(url);
-        window.open(url, '_blank');
+        const shareUrl = `${window.location.origin}/draw/${data.draw_id}`;
+        setter({ ...existing, shareUrl });
+        try { await navigator.clipboard.writeText(shareUrl); } catch {}
       } else {
-        setError(data.error || 'Failed to share draw.');
+        setError(data.error || 'Failed to save draw.');
       }
-    } catch (e) {
-      setError('Failed to share draw.');
-    } finally {
-      setLoading(false);
+    } catch {
+      setError('Failed to save draw.');
     }
   };
 
-  const shareDrawYt = async () => {
-    setLoading({ label: 'Saving draw…' });
-    try {
-      const res = await fetch('/api/save-draw', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'youtube',
-          video_url: ytData.url,
-          winners: ytData.winners,
-          commenters: ytData.commenters,
-          keyword: ytData.keyword,
-          seed: ytData.seed,
-          seed_hash: ytData.seedHash,
-        }),
-      });
-      const data = await res.json();
-      if (data.draw_id) {
-        const url = `${window.location.origin}/draw/${data.draw_id}`;
-        await navigator.clipboard.writeText(url);
-        window.open(url, '_blank');
-      } else {
-        setError(data.error || 'Failed to share draw.');
-      }
-    } catch (e) {
-      setError('Failed to share draw.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const shareDraw = () => _saveAndShare({
+    type: 'twitter',
+    tweet_url: twData.url, author: twData.author,
+    winners: twData.winners, eligible: twData.eligible,
+    retweeters: twData.retweeters, retweet: twData.retweet,
+    follow: twData.follow, seed: twData.seed, seed_hash: twData.seedHash,
+  }, setTwData, twData);
+
+  const shareDrawYt = () => _saveAndShare({
+    type: 'youtube',
+    video_url: ytData.url, winners: ytData.winners,
+    commenters: ytData.commenters, keyword: ytData.keyword,
+    seed: ytData.seed, seed_hash: ytData.seedHash,
+  }, setYtData, ytData);
 
   // ── YouTube reroll ──
   const rerollYoutube = async (ids) => {

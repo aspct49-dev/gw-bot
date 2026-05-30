@@ -44,8 +44,23 @@ function TwitterForm({ error, onSubmit }) {
 }
 
 /* ─────────────── Twitter results ─────────────── */
+function SharePanel({ shareUrl }) {
+  if (!shareUrl) return null;
+  return (
+    <div className="share-panel">
+      <div className="share-panel-label">Results link — tap to copy</div>
+      <input className="share-url-input" readOnly value={shareUrl}
+             onClick={e => { e.target.select(); try { navigator.clipboard.writeText(shareUrl); } catch {} }} />
+      <a className="btn btn-primary" href={shareUrl} target="_blank" rel="noreferrer"
+         style={{ marginTop: 8, textDecoration: 'none' }}>
+        Open results page ↗
+      </a>
+    </div>
+  );
+}
+
 function TwitterResults({ data, onBack, onReroll, onShare }) {
-  const { url, winners, retweeters, eligible, retweet, follow, author, seed, seedHash } = data;
+  const { url, winners, retweeters, eligible, retweet, follow, author, seed, seedHash, shareUrl } = data;
   const [marked, setMarked] = useStateS({});
   const anyMarked = Object.values(marked).some(Boolean);
   const canReroll = data.remaining && data.remaining.length > 0;
@@ -111,7 +126,10 @@ function TwitterResults({ data, onBack, onReroll, onShare }) {
               : null
             }
           </div>
-          <button className="btn btn-outline" style={{ marginTop: 10 }} onClick={onShare}>Share draw ↗</button>
+          {shareUrl
+            ? <SharePanel shareUrl={shareUrl} />
+            : <button className="btn btn-outline" style={{ marginTop: 10 }} onClick={onShare}>Share draw ↗</button>
+          }
           <FairProof seed={seed} seedHash={seedHash} />
         </>
       ) : (
@@ -173,7 +191,7 @@ function YoutubeForm({ error, onSubmit }) {
 
 /* ─────────────── YouTube results ─────────────── */
 function YoutubeResults({ data, onBack, onReroll, onShare }) {
-  const { url, winners, commenters, keyword, seed, seedHash } = data;
+  const { url, winners, commenters, keyword, seed, seedHash, shareUrl } = data;
   const [marked, setMarked] = useStateS({});
   const anyMarked = Object.values(marked).some(Boolean);
   const canReroll = data.remaining && data.remaining.length > 0;
@@ -228,7 +246,10 @@ function YoutubeResults({ data, onBack, onReroll, onShare }) {
               : null
             }
           </div>
-          <button className="btn btn-outline" style={{ marginTop: 10 }} onClick={onShare}>Share draw ↗</button>
+          {shareUrl
+            ? <SharePanel shareUrl={shareUrl} />
+            : <button className="btn btn-outline" style={{ marginTop: 10 }} onClick={onShare}>Share draw ↗</button>
+          }
           <FairProof seed={seed} seedHash={seedHash} />
         </>
       ) : (
