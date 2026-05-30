@@ -103,11 +103,23 @@ def parse_tweet_url(tweet_url):
     return tweet_id, author_username
 
 
+def _user_dict(user):
+    avatar = (getattr(user, 'profile_image_url', '') or '').replace('_normal.', '_400x400.')
+    return {
+        'id': user.id,
+        'username': user.screen_name,
+        'name': user.name,
+        'avatar': avatar,
+        'bio': getattr(user, 'description', '') or '',
+        'location': getattr(user, 'location', '') or '',
+    }
+
+
 async def fetch_all_users(fetch_func, tweet_id, max_pages=10):
     users = []
     result = await fetch_func(tweet_id, count=100)
     for user in result:
-        users.append({'id': user.id, 'username': user.screen_name, 'name': user.name})
+        users.append(_user_dict(user))
     pages = 1
     while pages < max_pages:
         try:
@@ -115,7 +127,7 @@ async def fetch_all_users(fetch_func, tweet_id, max_pages=10):
             if not result:
                 break
             for user in result:
-                users.append({'id': user.id, 'username': user.screen_name, 'name': user.name})
+                users.append(_user_dict(user))
             pages += 1
         except Exception:
             break

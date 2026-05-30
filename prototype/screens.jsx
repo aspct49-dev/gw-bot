@@ -87,11 +87,14 @@ function TwitterResults({ data, onBack, onReroll }) {
             {winners.map((w, i) => (
               <li className="winner" key={w.id} data-marked={canReroll && marked[w.id] ? '1' : '0'}>
                 <span className="wnum">{i + 1}</span>
+                {w.avatar && <img className="winner-avatar" src={w.avatar} alt={w.name} />}
                 <div className="winner-body">
                   <div className="winner-name">{w.name}</div>
                   <div className="winner-handle">
                     <a href={`https://twitter.com/${w.username}`} target="_blank" rel="noreferrer">@{w.username}</a>
                   </div>
+                  {w.bio && <div className="winner-bio">"{w.bio}"</div>}
+                  {w.location && <div className="winner-location">📍 {w.location}</div>}
                 </div>
                 {canReroll && (
                   <span className="rr" data-on={marked[w.id] ? '1' : '0'}

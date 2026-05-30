@@ -453,6 +453,14 @@ body {
   background: var(--accent-soft);
   border: 1px solid color-mix(in srgb, var(--accent) 16%, transparent);
 }
+.winner-avatar {
+  flex-shrink: 0;
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1.5px solid var(--divider);
+  background: var(--track);
+}
 .winner-body { flex: 1; min-width: 0; }
 .winner-name { font-size: 14.5px; font-weight: 600; color: var(--text); letter-spacing: -.01em; }
 .winner-handle {
@@ -462,6 +470,21 @@ body {
 }
 .winner-handle a { color: var(--accent); text-decoration: none; }
 .winner-handle a:hover { text-decoration: underline; }
+.winner-bio {
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.5;
+  margin-top: 7px;
+  word-break: break-word;
+}
+.winner-location {
+  font-size: 11.5px;
+  color: var(--subtle);
+  margin-top: 5px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
 .winner-comment {
   font-size: 13px;
   color: var(--muted);
