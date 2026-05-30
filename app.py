@@ -2,6 +2,9 @@ import os
 import json
 import base64
 import asyncio
+import random
+import secrets
+import hashlib
 from random import shuffle
 from itertools import islice
 from flask import Flask, request, session, send_from_directory, jsonify
@@ -156,12 +159,12 @@ async def pick_winners_async(tweet_url, num_winners, require_retweet, require_fo
         raise ValueError('No participants found. Make sure the tweet has retweets.')
 
     num_retweeters = len(retweeters)
-    shuffle(retweeters)
+    server_seed, seed_hash = make_seed()
+    seeded_shuffle(retweeters, server_seed)
 
     errors = []
     if require_follow and author_username:
         follower_ids, fid_error = await fetch_follower_ids(client, author_username)
-        errors.append(f'[debug] follower_ids fetched: {len(follower_ids)}, error: {fid_error}, sample retweeter id: {retweeters[0]["id"] if retweeters else "none"}, in_followers: {str(retweeters[0]["id"]) in follower_ids if retweeters else "n/a"}')
         if follower_ids:
             retweeters = [u for u in retweeters if str(u['id']) in follower_ids]
         else:
@@ -177,7 +180,19 @@ async def pick_winners_async(tweet_url, num_winners, require_retweet, require_fo
         'retweeters': num_retweeters,
         'author': author_username,
         'errors': errors,
+        'seed': server_seed,
+        'seed_hash': seed_hash,
     }
+
+
+def make_seed():
+    seed = secrets.token_hex(32)
+    seed_hash = hashlib.sha256(seed.encode()).hexdigest()
+    return seed, seed_hash
+
+
+def seeded_shuffle(lst, seed):
+    random.Random(int(seed, 16)).shuffle(lst)
 
 
 def format_comment(c):
@@ -270,15 +285,18 @@ def api_youtube_pick():
             seen.add(key)
             unique.append(c)
 
-    shuffle(unique)
+    server_seed, seed_hash = make_seed()
+    seeded_shuffle(unique, server_seed)
     winners = [format_comment(c) for c in unique[:num_winners]]
     remaining = [format_comment(c) for c in unique[num_winners:]]
 
-    return jsonify(winners=winners, remaining=remaining, commenters=len(unique), keyword=keyword)
+    return jsonify(winners=winners, remaining=remaining, commenters=len(unique),
+                   keyword=keyword, seed=server_seed, seed_hash=seed_hash)
 
 
 def _do_reroll(current_winners, remaining, reroll_ids):
-    shuffle(remaining)
+    server_seed, seed_hash = make_seed()
+    seeded_shuffle(remaining, server_seed)
     pool = list(remaining)
     updated = []
     for w in current_winners:
@@ -286,7 +304,7 @@ def _do_reroll(current_winners, remaining, reroll_ids):
             updated.append(pool.pop(0))
         else:
             updated.append(w)
-    return updated, pool
+    return updated, pool, server_seed, seed_hash
 
 
 @app.route('/api/youtube/reroll', methods=['POST'])
@@ -295,8 +313,8 @@ def api_youtube_reroll():
     reroll_ids = set(data.get('reroll_ids', []))
     current_winners = data.get('winners', [])
     remaining = data.get('remaining', [])
-    updated, pool = _do_reroll(current_winners, remaining, reroll_ids)
-    return jsonify(winners=updated, remaining=pool)
+    updated, pool, seed, seed_hash = _do_reroll(current_winners, remaining, reroll_ids)
+    return jsonify(winners=updated, remaining=pool, seed=seed, seed_hash=seed_hash)
 
 
 @app.route('/api/twitter/reroll', methods=['POST'])
@@ -305,8 +323,8 @@ def api_twitter_reroll():
     reroll_ids = set(data.get('reroll_ids', []))
     current_winners = data.get('winners', [])
     remaining = data.get('remaining', [])
-    updated, pool = _do_reroll(current_winners, remaining, reroll_ids)
-    return jsonify(winners=updated, remaining=pool)
+    updated, pool, seed, seed_hash = _do_reroll(current_winners, remaining, reroll_ids)
+    return jsonify(winners=updated, remaining=pool, seed=seed, seed_hash=seed_hash)
 
 
 if __name__ == '__main__':

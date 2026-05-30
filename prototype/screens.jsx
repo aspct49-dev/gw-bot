@@ -45,7 +45,7 @@ function TwitterForm({ error, onSubmit }) {
 
 /* ─────────────── Twitter results ─────────────── */
 function TwitterResults({ data, onBack, onReroll }) {
-  const { url, winners, retweeters, eligible, retweet, follow, author } = data;
+  const { url, winners, retweeters, eligible, retweet, follow, author, seed, seedHash } = data;
   const [marked, setMarked] = useStateS({});
   const anyMarked = Object.values(marked).some(Boolean);
   const canReroll = data.remaining && data.remaining.length > 0;
@@ -108,6 +108,7 @@ function TwitterResults({ data, onBack, onReroll }) {
               : <button className="btn btn-primary" onClick={onBack}>Run another draw <Arrow /></button>
             }
           </div>
+          <FairProof seed={seed} seedHash={seedHash} />
         </>
       ) : (
         <>
@@ -168,7 +169,7 @@ function YoutubeForm({ error, onSubmit }) {
 
 /* ─────────────── YouTube results ─────────────── */
 function YoutubeResults({ data, onBack, onReroll }) {
-  const { url, winners, commenters, keyword } = data;
+  const { url, winners, commenters, keyword, seed, seedHash } = data;
   const [marked, setMarked] = useStateS({});
   const anyMarked = Object.values(marked).some(Boolean);
   const canReroll = data.remaining && data.remaining.length > 0;
@@ -223,6 +224,7 @@ function YoutubeResults({ data, onBack, onReroll }) {
               : <button className="btn btn-primary" onClick={onBack}>Run another draw <Arrow /></button>
             }
           </div>
+          <FairProof seed={seed} seedHash={seedHash} />
         </>
       ) : (
         <>
@@ -237,4 +239,26 @@ function YoutubeResults({ data, onBack, onReroll }) {
   );
 }
 
-Object.assign(window, { TwitterForm, TwitterResults, YoutubeForm, YoutubeResults });
+/* ─────────────── Provably Fair proof ─────────────── */
+function FairProof({ seed, seedHash }) {
+  if (!seed) return null;
+  return (
+    <div className="fair">
+      <div className="fair-head">Provably Fair</div>
+      <div className="fair-row">
+        <span className="fair-key">Seed</span>
+        <code className="fair-val" title="Click to select">{seed}</code>
+      </div>
+      <div className="fair-row">
+        <span className="fair-key">SHA-256</span>
+        <code className="fair-val" title="Click to select">{seedHash}</code>
+      </div>
+      <p className="fair-hint">
+        Verify: compute <strong>SHA-256(seed)</strong> and confirm it matches the hash above using any{' '}
+        <a href="https://emn178.github.io/online-tools/sha256.html" target="_blank" rel="noreferrer">online tool</a>.
+      </p>
+    </div>
+  );
+}
+
+Object.assign(window, { TwitterForm, TwitterResults, YoutubeForm, YoutubeResults, FairProof });

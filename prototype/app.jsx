@@ -54,6 +54,7 @@ function App() {
         url: form.url, winners: data.winners, remaining: data.remaining || [],
         retweeters: data.retweeters, eligible: data.eligible,
         retweet: form.retweet, follow: form.follow, author: data.author,
+        seed: data.seed, seedHash: data.seed_hash,
       });
       setScreen('twitterResults');
     } catch (e) {
@@ -79,7 +80,7 @@ function App() {
       });
       const data = await res.json();
       if (data.error) { setError(data.error); return; }
-      setTwData({ ...twData, winners: data.winners, remaining: data.remaining });
+      setTwData({ ...twData, winners: data.winners, remaining: data.remaining, seed: data.seed, seedHash: data.seed_hash });
     } catch (e) {
       if (e.name === 'AbortError') return;
       setError('Failed to reroll. Please try again.');
@@ -104,7 +105,7 @@ function App() {
       });
       const data = await res.json();
       if (data.error) { setError(data.error); return; }
-      setYtData({ url: form.url, winners: data.winners, remaining: data.remaining || [], commenters: data.commenters, keyword: form.keyword });
+      setYtData({ url: form.url, winners: data.winners, remaining: data.remaining || [], commenters: data.commenters, keyword: form.keyword, seed: data.seed, seedHash: data.seed_hash });
       setScreen('youtubeResults');
     } catch (e) {
       if (e.name === 'AbortError') return;
@@ -129,7 +130,7 @@ function App() {
       });
       const data = await res.json();
       if (data.error) { setError(data.error); return; }
-      setYtData({ ...ytData, winners: data.winners, remaining: data.remaining });
+      setYtData({ ...ytData, winners: data.winners, remaining: data.remaining, seed: data.seed, seedHash: data.seed_hash });
     } catch (e) {
       if (e.name === 'AbortError') return;
       setError('Failed to reroll. Please try again.');
