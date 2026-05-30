@@ -35,24 +35,30 @@ def _sb_headers():
 
 
 def db_save_draw(draw_id, data):
-    r = req_lib.post(
-        f'{SUPABASE_URL}/rest/v1/draws',
-        json={'draw_id': draw_id, 'data': data},
-        headers=_sb_headers(), timeout=10
-    )
-    return r.ok
+    try:
+        r = req_lib.post(
+            f'{SUPABASE_URL}/rest/v1/draws',
+            json={'draw_id': draw_id, 'data': data},
+            headers=_sb_headers(), timeout=10
+        )
+        return r.ok, r.text
+    except Exception as e:
+        return False, str(e)
 
 
 def db_get_draw(draw_id):
-    r = req_lib.get(
-        f'{SUPABASE_URL}/rest/v1/draws',
-        params={'draw_id': f'eq.{draw_id}', 'select': 'data'},
-        headers=_sb_headers(), timeout=10
-    )
-    if r.ok:
-        rows = r.json()
-        if rows:
-            return rows[0]['data']
+    try:
+        r = req_lib.get(
+            f'{SUPABASE_URL}/rest/v1/draws',
+            params={'draw_id': f'eq.{draw_id}', 'select': 'data'},
+            headers=_sb_headers(), timeout=10
+        )
+        if r.ok:
+            rows = r.json()
+            if rows:
+                return rows[0]['data']
+    except Exception:
+        pass
     return None
 COOKIES_FILE = os.path.join(BASE_DIR, 'cookies.json')
 
@@ -395,13 +401,21 @@ def format_comment(c):
 
 @app.route('/api/save-draw', methods=['POST'])
 def api_save_draw():
-    if not SUPABASE_URL:
-        return jsonify(error='Database not configured.')
-    payload = request.get_json()
-    draw_id = secrets.token_hex(4)
-    if db_save_draw(draw_id, payload):
-        return jsonify(draw_id=draw_id)
-    return jsonify(error='Failed to save draw.')
+    try:
+        if not SUPABASE_URL:
+            return jsonify(error='SUPABASE_URL not configured.')
+        if not SUPABASE_KEY:
+            return jsonify(error='SUPABASE_SERVICE_KEY not configured.')
+        payload = request.get_json()
+        if not payload:
+            return jsonify(error='No payload received.')
+        draw_id = secrets.token_hex(4)
+        ok, detail = db_save_draw(draw_id, payload)
+        if ok:
+            return jsonify(draw_id=draw_id)
+        return jsonify(error=f'Supabase error: {detail}')
+    except Exception as e:
+        return jsonify(error=f'Server error: {e}'), 500
 
 
 @app.route('/api/draw/<draw_id>')

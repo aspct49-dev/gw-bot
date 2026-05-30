@@ -2,3 +2,4 @@ flask==3.1.1
 twikit==2.3.3
 python-dotenv==1.2.2
 youtube-comment-downloader
+requests
