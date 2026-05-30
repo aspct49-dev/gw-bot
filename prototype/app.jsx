@@ -115,6 +115,72 @@ function App() {
     }
   };
 
+  // ── Share draw ──
+  const shareDraw = async () => {
+    setLoading({ label: 'Saving draw…' });
+    try {
+      const res = await fetch('/api/save-draw', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'twitter',
+          tweet_url: twData.url,
+          author: twData.author,
+          winners: twData.winners,
+          eligible: twData.eligible,
+          retweeters: twData.retweeters,
+          retweet: twData.retweet,
+          follow: twData.follow,
+          seed: twData.seed,
+          seed_hash: twData.seedHash,
+        }),
+      });
+      const data = await res.json();
+      if (data.draw_id) {
+        const url = `${window.location.origin}/draw/${data.draw_id}`;
+        await navigator.clipboard.writeText(url);
+        window.open(url, '_blank');
+      } else {
+        setError(data.error || 'Failed to share draw.');
+      }
+    } catch (e) {
+      setError('Failed to share draw.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const shareDrawYt = async () => {
+    setLoading({ label: 'Saving draw…' });
+    try {
+      const res = await fetch('/api/save-draw', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'youtube',
+          video_url: ytData.url,
+          winners: ytData.winners,
+          commenters: ytData.commenters,
+          keyword: ytData.keyword,
+          seed: ytData.seed,
+          seed_hash: ytData.seedHash,
+        }),
+      });
+      const data = await res.json();
+      if (data.draw_id) {
+        const url = `${window.location.origin}/draw/${data.draw_id}`;
+        await navigator.clipboard.writeText(url);
+        window.open(url, '_blank');
+      } else {
+        setError(data.error || 'Failed to share draw.');
+      }
+    } catch (e) {
+      setError('Failed to share draw.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // ── YouTube reroll ──
   const rerollYoutube = async (ids) => {
     if (!ytData || !ids.length) return;
@@ -157,11 +223,11 @@ function App() {
   } else if (screen === 'twitter') {
     body = <TwitterForm error={error} onSubmit={pickTwitter} />;
   } else if (screen === 'twitterResults') {
-    body = <TwitterResults data={twData} onBack={() => goTab('twitter')} onReroll={rerollTwitter} />;
+    body = <TwitterResults data={twData} onBack={() => goTab('twitter')} onReroll={rerollTwitter} onShare={shareDraw} />;
   } else if (screen === 'youtube') {
     body = <YoutubeForm error={error} onSubmit={pickYoutube} />;
   } else if (screen === 'youtubeResults') {
-    body = <YoutubeResults data={ytData} onBack={() => goTab('youtube')} onReroll={rerollYoutube} />;
+    body = <YoutubeResults data={ytData} onBack={() => goTab('youtube')} onReroll={rerollYoutube} onShare={shareDrawYt} />;
   }
 
   return (

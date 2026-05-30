@@ -44,7 +44,7 @@ function TwitterForm({ error, onSubmit }) {
 }
 
 /* ─────────────── Twitter results ─────────────── */
-function TwitterResults({ data, onBack, onReroll }) {
+function TwitterResults({ data, onBack, onReroll, onShare }) {
   const { url, winners, retweeters, eligible, retweet, follow, author, seed, seedHash } = data;
   const [marked, setMarked] = useStateS({});
   const anyMarked = Object.values(marked).some(Boolean);
@@ -108,7 +108,7 @@ function TwitterResults({ data, onBack, onReroll }) {
             <button className="btn btn-outline" onClick={onBack}>New draw</button>
             {canReroll
               ? <button className="btn btn-primary" disabled={!anyMarked} onClick={doReroll}>Reroll selected</button>
-              : <button className="btn btn-primary" onClick={onBack}>Run another draw <Arrow /></button>
+              : <button className="btn btn-primary" onClick={onShare}>Share draw ↗</button>
             }
           </div>
           <FairProof seed={seed} seedHash={seedHash} />
@@ -171,7 +171,7 @@ function YoutubeForm({ error, onSubmit }) {
 }
 
 /* ─────────────── YouTube results ─────────────── */
-function YoutubeResults({ data, onBack, onReroll }) {
+function YoutubeResults({ data, onBack, onReroll, onShare }) {
   const { url, winners, commenters, keyword, seed, seedHash } = data;
   const [marked, setMarked] = useStateS({});
   const anyMarked = Object.values(marked).some(Boolean);
@@ -224,7 +224,7 @@ function YoutubeResults({ data, onBack, onReroll }) {
             <button className="btn btn-outline" onClick={onBack}>New draw</button>
             {canReroll
               ? <button className="btn btn-primary" disabled={!anyMarked} onClick={doReroll}>Reroll selected</button>
-              : <button className="btn btn-primary" onClick={onBack}>Run another draw <Arrow /></button>
+              : <button className="btn btn-primary" onClick={onShare}>Share draw ↗</button>
             }
           </div>
           <FairProof seed={seed} seedHash={seedHash} />

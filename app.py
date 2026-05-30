@@ -6,6 +6,7 @@ import random
 import secrets
 import hashlib
 from random import shuffle
+import requests as req_lib
 from itertools import islice
 from flask import Flask, request, session, send_from_directory, jsonify
 from dotenv import load_dotenv
@@ -20,6 +21,39 @@ from youtube_comment_downloader import YoutubeCommentDownloader, SORT_BY_RECENT
 load_dotenv()
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+SUPABASE_URL = os.getenv('SUPABASE_URL', '')
+SUPABASE_KEY = os.getenv('SUPABASE_SERVICE_KEY', '')
+
+
+def _sb_headers():
+    return {
+        'apikey': SUPABASE_KEY,
+        'Authorization': f'Bearer {SUPABASE_KEY}',
+        'Content-Type': 'application/json',
+    }
+
+
+def db_save_draw(draw_id, data):
+    r = req_lib.post(
+        f'{SUPABASE_URL}/rest/v1/draws',
+        json={'draw_id': draw_id, 'data': data},
+        headers=_sb_headers(), timeout=10
+    )
+    return r.ok
+
+
+def db_get_draw(draw_id):
+    r = req_lib.get(
+        f'{SUPABASE_URL}/rest/v1/draws',
+        params={'draw_id': f'eq.{draw_id}', 'select': 'data'},
+        headers=_sb_headers(), timeout=10
+    )
+    if r.ok:
+        rows = r.json()
+        if rows:
+            return rows[0]['data']
+    return None
 COOKIES_FILE = os.path.join(BASE_DIR, 'cookies.json')
 
 # Patch ClientTransaction.init to gracefully handle Twitter JS parsing failures.
@@ -211,6 +245,139 @@ def seeded_shuffle(lst, seed):
     random.Random(int(seed, 16)).shuffle(lst)
 
 
+DRAW_PAGE_TEMPLATE = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ og_title }}</title>
+<meta property="og:title" content="{{ og_title }}">
+<meta property="og:description" content="{{ og_desc }}">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="{{ og_title }}">
+<meta name="twitter:description" content="{{ og_desc }}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Plus Jakarta Sans',-apple-system,sans-serif;background:#eef2fb;color:#0f1c3f;min-height:100vh;-webkit-font-smoothing:antialiased}
+.page{max-width:720px;margin:0 auto;padding:32px 20px 60px}
+.header{text-align:center;margin-bottom:32px}
+.logo{font-size:22px;font-weight:800;color:#2454d6;letter-spacing:-.02em;margin-bottom:12px}
+.draw-meta{font-size:13.5px;color:#64748b;line-height:1.7}
+.draw-meta a{color:#2454d6;text-decoration:none}
+.draw-meta a:hover{text-decoration:underline}
+.meta-pills{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:10px}
+.meta-pill{background:#fff;border:1px solid #dde3f0;border-radius:999px;padding:4px 13px;font-size:12px;font-weight:600;color:#64748b}
+.section-title{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#94a3b8;margin-bottom:16px}
+.winners{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;margin-bottom:32px}
+.winner-card{background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 2px 12px rgba(15,35,100,.07)}
+.winner-avatar{width:100%;aspect-ratio:1;object-fit:cover;background:#dde3f0;display:block}
+.winner-avatar-placeholder{width:100%;aspect-ratio:1;background:linear-gradient(135deg,#dde3f0,#c7d2ea);display:flex;align-items:center;justify-content:center;font-size:40px;color:#94a3b8}
+.winner-info{padding:14px 16px}
+.winner-num{font-size:11px;font-weight:700;color:#94a3b8;letter-spacing:.06em;text-transform:uppercase;margin-bottom:4px}
+.winner-name{font-size:15px;font-weight:700;color:#0f1c3f;letter-spacing:-.01em;margin-bottom:2px}
+.winner-handle{font-family:'IBM Plex Mono',monospace;font-size:12px;color:#2454d6;margin-bottom:8px}
+.winner-bio{font-size:12px;color:#64748b;line-height:1.5;margin-bottom:6px;word-break:break-word}
+.winner-location{font-size:11.5px;color:#94a3b8;display:flex;align-items:center;gap:4px}
+.profile-btn{display:block;margin:12px 16px 14px;padding:9px;background:#f0f4ff;border:1.5px solid #c7d2f5;border-radius:10px;text-align:center;font-size:13px;font-weight:600;color:#2454d6;text-decoration:none;transition:background .2s}
+.profile-btn:hover{background:#e0e8ff}
+.fair{background:#fff;border-radius:14px;padding:18px 20px;box-shadow:0 2px 12px rgba(15,35,100,.07);margin-bottom:24px}
+.fair-title{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#94a3b8;margin-bottom:12px;display:flex;align-items:center;gap:7px}
+.fair-title::before{content:'';width:8px;height:8px;border-radius:50%;background:#2454d6;opacity:.5;flex-shrink:0}
+.fair-row{display:flex;gap:10px;margin-bottom:8px;align-items:baseline}
+.fair-key{font-size:10.5px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;width:46px;flex-shrink:0}
+.fair-val{font-family:'IBM Plex Mono',monospace;font-size:10px;color:#64748b;word-break:break-all;background:#f8faff;padding:5px 8px;border-radius:6px;border:1px solid #dde3f0;flex:1;user-select:all}
+.fair-hint{font-size:11px;color:#94a3b8;margin-top:10px;line-height:1.55}
+.fair-hint a{color:#2454d6;text-decoration:none}
+.footer{text-align:center;font-size:12px;color:#94a3b8;margin-top:32px}
+@media(max-width:480px){.winners{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="header">
+    <div class="logo">Doug's Giveaway Bot</div>
+    <div id="draw-meta"></div>
+  </div>
+  <div class="section-title">Winners</div>
+  <div class="winners" id="winners"></div>
+  <div id="fair-section"></div>
+  <div class="footer">Powered by Doug's Giveaway Bot &mdash; Provably Fair</div>
+</div>
+<script>
+const DRAW = {{ data_json | safe }};
+const isYoutube = DRAW.type === 'youtube';
+
+// Meta
+const meta = document.getElementById('draw-meta');
+if (isYoutube) {
+  const url = DRAW.video_url || '';
+  meta.innerHTML = \`<div>From <a href="\${url}" target="_blank" rel="noreferrer">\${url}</a></div>
+  <div class="meta-pills">
+    <span class="meta-pill">\${(DRAW.commenters||0).toLocaleString()} commenters</span>
+    <span class="meta-pill">\${DRAW.winners.length} winner\${DRAW.winners.length!==1?'s':''}</span>
+    \${DRAW.keyword ? \`<span class="meta-pill">Keyword: "\${DRAW.keyword}"</span>\` : ''}
+  </div>\`;
+} else {
+  const url = DRAW.tweet_url || '';
+  const author = DRAW.author || '';
+  meta.innerHTML = \`<div>From a post by <a href="https://twitter.com/\${author}" target="_blank" rel="noreferrer">@\${author}</a></div>
+  <div class="meta-pills">
+    <span class="meta-pill">\${(DRAW.eligible||0).toLocaleString()} eligible</span>
+    <span class="meta-pill">\${DRAW.winners.length} winner\${DRAW.winners.length!==1?'s':''}</span>
+    \${DRAW.retweet ? '<span class="meta-pill">✓ Reposted</span>' : ''}
+    \${DRAW.follow ? \`<span class="meta-pill">✓ Follows @\${author}</span>\` : ''}
+  </div>\`;
+}
+
+// Winners
+const grid = document.getElementById('winners');
+DRAW.winners.forEach((w, i) => {
+  const card = document.createElement('div');
+  card.className = 'winner-card';
+  const name = w.name || w.author || '';
+  const handle = w.username || '';
+  const avatar = w.avatar || '';
+  const bio = w.bio || w.text || '';
+  const location = w.location || '';
+  const profileUrl = isYoutube
+    ? \`https://youtube.com/\${w.id || ''}\`
+    : \`https://twitter.com/\${handle}\`;
+
+  card.innerHTML = \`
+    \${avatar
+      ? \`<img class="winner-avatar" src="\${avatar}" alt="\${name}" loading="lazy">\`
+      : \`<div class="winner-avatar-placeholder">👤</div>\`}
+    <div class="winner-info">
+      <div class="winner-num">#\${i+1}</div>
+      <div class="winner-name">\${name}</div>
+      \${handle ? \`<div class="winner-handle">@\${handle}</div>\` : ''}
+      \${bio ? \`<div class="winner-bio">"\${bio}"</div>\` : ''}
+      \${location ? \`<div class="winner-location">📍 \${location}</div>\` : ''}
+    </div>
+    <a class="profile-btn" href="\${profileUrl}" target="_blank" rel="noreferrer">View Profile ↗</a>
+  \`;
+  grid.appendChild(card);
+});
+
+// Provably Fair
+if (DRAW.seed) {
+  document.getElementById('fair-section').innerHTML = \`
+    <div class="fair">
+      <div class="fair-title">Provably Fair</div>
+      <div class="fair-row"><span class="fair-key">Seed</span><code class="fair-val">\${DRAW.seed}</code></div>
+      <div class="fair-row"><span class="fair-key">SHA-256</span><code class="fair-val">\${DRAW.seed_hash}</code></div>
+      <p class="fair-hint">Verify: compute SHA-256(seed) and confirm it matches the hash above using any <a href="https://emn178.github.io/online-tools/sha256.html" target="_blank">online tool</a>.</p>
+    </div>
+  \`;
+}
+</script>
+</body>
+</html>"""
+
+
 def format_comment(c):
     votes = c.get('votes', 0)
     try:
@@ -224,6 +391,45 @@ def format_comment(c):
         'time': c.get('time', ''),
         'votes': votes,
     }
+
+
+@app.route('/api/save-draw', methods=['POST'])
+def api_save_draw():
+    if not SUPABASE_URL:
+        return jsonify(error='Database not configured.')
+    payload = request.get_json()
+    draw_id = secrets.token_hex(4)
+    if db_save_draw(draw_id, payload):
+        return jsonify(draw_id=draw_id)
+    return jsonify(error='Failed to save draw.')
+
+
+@app.route('/api/draw/<draw_id>')
+def api_get_draw(draw_id):
+    data = db_get_draw(draw_id)
+    if not data:
+        return jsonify(error='Draw not found'), 404
+    return jsonify(data)
+
+
+@app.route('/draw/<draw_id>')
+def draw_page(draw_id):
+    from flask import render_template_string
+    data = db_get_draw(draw_id)
+    if not data:
+        return 'Draw not found', 404
+    winners = data.get('winners', [])
+    author = data.get('author', '')
+    draw_type = data.get('type', 'twitter')
+    og_title = f"Giveaway Winners — @{author}" if author else "Giveaway Winners"
+    og_desc = ' · '.join(
+        f"@{w.get('username') or w.get('author', '')}" for w in winners
+    ) or 'View draw results'
+    data_json = json.dumps(data)
+    return render_template_string(DRAW_PAGE_TEMPLATE,
+        og_title=og_title, og_desc=og_desc,
+        draw_id=draw_id, data_json=data_json,
+        draw_type=draw_type)
 
 
 @app.route('/api/debug-raw-user')
