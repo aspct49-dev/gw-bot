@@ -108,9 +108,10 @@ function TwitterResults({ data, onBack, onReroll, onShare }) {
             <button className="btn btn-outline" onClick={onBack}>New draw</button>
             {canReroll
               ? <button className="btn btn-primary" disabled={!anyMarked} onClick={doReroll}>Reroll selected</button>
-              : <button className="btn btn-primary" onClick={onShare}>Share draw ↗</button>
+              : null
             }
           </div>
+          <button className="btn btn-outline" style={{ marginTop: 10 }} onClick={onShare}>Share draw ↗</button>
           <FairProof seed={seed} seedHash={seedHash} />
         </>
       ) : (
@@ -224,9 +225,10 @@ function YoutubeResults({ data, onBack, onReroll, onShare }) {
             <button className="btn btn-outline" onClick={onBack}>New draw</button>
             {canReroll
               ? <button className="btn btn-primary" disabled={!anyMarked} onClick={doReroll}>Reroll selected</button>
-              : <button className="btn btn-primary" onClick={onShare}>Share draw ↗</button>
+              : null
             }
           </div>
+          <button className="btn btn-outline" style={{ marginTop: 10 }} onClick={onShare}>Share draw ↗</button>
           <FairProof seed={seed} seedHash={seedHash} />
         </>
       ) : (
