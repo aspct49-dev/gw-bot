@@ -212,39 +212,62 @@ async def check_follows(client, user_id, author_username, max_pages=3):
 async def pick_winners_async(tweet_url, num_winners, require_retweet, require_follow):
     tweet_id, author_username = parse_tweet_url(tweet_url)
     client = make_client()
-
-    retweeters = []
-    if require_retweet:
-        retweeters = await fetch_all_users(client.get_retweeters, tweet_id)
-
-    if not retweeters:
-        raise ValueError('No participants found. Make sure the tweet has retweets.')
-
-    num_retweeters = len(retweeters)
-    server_seed, seed_hash = make_seed()
-    seeded_shuffle(retweeters, server_seed)
-
     errors = []
-    if require_follow and author_username:
-        eligible = []
-        # Check each retweeter directly — only need enough to fill winners + pool
-        check_limit = min(len(retweeters), max(num_winners * 6, 15))
-        for user in retweeters[:check_limit]:
-            if await check_follows(client, user['id'], author_username):
-                eligible.append(user)
-        if eligible:
-            retweeters = eligible
-        else:
-            errors.append('No followers found among retweeters — showing all retweeters.')
+    server_seed, seed_hash = make_seed()
 
-    winners = retweeters[:num_winners]
-    remaining = retweeters[num_winners:]
+    if require_retweet:
+        pool = await fetch_all_users(client.get_retweeters, tweet_id)
+        if not pool:
+            raise ValueError('No participants found. Make sure the tweet has retweets.')
+        num_pool = len(pool)
+        seeded_shuffle(pool, server_seed)
+
+        if require_follow and author_username:
+            eligible = []
+            check_limit = min(len(pool), max(num_winners * 6, 15))
+            for user in pool[:check_limit]:
+                if await check_follows(client, user['id'], author_username):
+                    eligible.append(user)
+            if eligible:
+                pool = eligible
+            else:
+                errors.append('No followers found among retweeters — showing all retweeters.')
+
+    else:
+        # Follow-only: pool is the author's followers
+        if not author_username:
+            raise ValueError('Could not extract author username from URL.')
+        try:
+            author = await client.get_user_by_screen_name(author_username)
+            pool = []
+            result = await author.get_followers(count=200)
+            for u in result:
+                try: pool.append(_user_dict(u))
+                except Exception: continue
+            for _ in range(4):
+                try:
+                    result = await result.next()
+                    if not result: break
+                    for u in result:
+                        try: pool.append(_user_dict(u))
+                        except Exception: continue
+                except Exception:
+                    break
+        except Exception as e:
+            raise ValueError(f'Could not fetch followers: {e}')
+        if not pool:
+            raise ValueError('No followers found.')
+        num_pool = len(pool)
+        seeded_shuffle(pool, server_seed)
+
+    winners = pool[:num_winners]
+    remaining = pool[num_winners:]
 
     return {
         'winners': winners,
         'remaining': remaining,
-        'eligible': len(retweeters),
-        'retweeters': num_retweeters,
+        'eligible': len(pool),
+        'retweeters': num_pool,
         'author': author_username,
         'errors': errors,
         'seed': server_seed,
@@ -500,8 +523,8 @@ def api_pick():
 
     if not tweet_url:
         return jsonify(error='Tweet URL is required.')
-    if not require_retweet:
-        return jsonify(error='Retweet requirement must be selected.')
+    if not require_retweet and not require_follow:
+        return jsonify(error='Select at least one requirement.')
 
     try:
         result = asyncio.run(

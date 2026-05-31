@@ -8,6 +8,7 @@ function TwitterForm({ error, onSubmit }) {
   const [num, setNum] = useStateS(1);
   const [retweet, setRetweet] = useStateS(true);
   const [follow, setFollow] = useStateS(false);
+  const noneSelected = !retweet && !follow;
 
   return (
     <div className="screen">
@@ -36,6 +37,7 @@ function TwitterForm({ error, onSubmit }) {
       </div>
 
       <button className="btn btn-primary" style={{ marginTop: 22 }}
+              disabled={noneSelected}
               onClick={() => onSubmit({ url, num: Number(num) || 1, retweet, follow })}>
         Pick winners <Arrow />
       </button>
