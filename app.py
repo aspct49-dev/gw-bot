@@ -215,50 +215,23 @@ async def pick_winners_async(tweet_url, num_winners, require_retweet, require_fo
     errors = []
     server_seed, seed_hash = make_seed()
 
-    if require_retweet:
-        pool = await fetch_all_users(client.get_retweeters, tweet_id)
-        if not pool:
-            raise ValueError('No participants found. Make sure the tweet has retweets.')
-        num_pool = len(pool)
-        seeded_shuffle(pool, server_seed)
+    # Always use retweeters as the base pool — gives a verifiable set of participants
+    pool = await fetch_all_users(client.get_retweeters, tweet_id)
+    if not pool:
+        raise ValueError('No participants found. Make sure the tweet has retweets.')
+    num_pool = len(pool)
+    seeded_shuffle(pool, server_seed)
 
-        if require_follow and author_username:
-            eligible = []
-            check_limit = min(len(pool), max(num_winners * 6, 15))
-            for user in pool[:check_limit]:
-                if await check_follows(client, user['id'], author_username):
-                    eligible.append(user)
-            if eligible:
-                pool = eligible
-            else:
-                errors.append('No followers found among retweeters — showing all retweeters.')
-
-    else:
-        # Follow-only: pool is the author's followers
-        if not author_username:
-            raise ValueError('Could not extract author username from URL.')
-        try:
-            author = await client.get_user_by_screen_name(author_username)
-            pool = []
-            result = await author.get_followers(count=200)
-            for u in result:
-                try: pool.append(_user_dict(u))
-                except Exception: continue
-            for _ in range(4):
-                try:
-                    result = await result.next()
-                    if not result: break
-                    for u in result:
-                        try: pool.append(_user_dict(u))
-                        except Exception: continue
-                except Exception:
-                    break
-        except Exception as e:
-            raise ValueError(f'Could not fetch followers: {e}')
-        if not pool:
-            raise ValueError('No followers found.')
-        num_pool = len(pool)
-        seeded_shuffle(pool, server_seed)
+    if require_follow and author_username:
+        eligible = []
+        check_limit = min(len(pool), max(num_winners * 6, 15))
+        for user in pool[:check_limit]:
+            if await check_follows(client, user['id'], author_username):
+                eligible.append(user)
+        if eligible:
+            pool = eligible
+        else:
+            errors.append('No followers found among retweeters — showing all retweeters.')
 
     winners = pool[:num_winners]
     remaining = pool[num_winners:]
