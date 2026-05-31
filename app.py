@@ -178,29 +178,35 @@ async def fetch_all_users(fetch_func, tweet_id, max_pages=10):
     return users
 
 
-async def fetch_follower_ids(client, screen_name, max_pages=20):
-    """Fetch follower IDs via GraphQL (cookie-auth friendly)."""
-    ids = set()
-    error = None
+async def check_follows(client, user_id, author_username, max_pages=3):
+    """Check if user_id follows @author_username by scanning their following list."""
     try:
-        author = await client.get_user_by_screen_name(screen_name)
-        result = await author.get_followers(count=200)
-        for user in result:
-            ids.add(str(user.id))
+        u = await client.get_user_by_id(str(user_id))
+        result = await u.get_following(count=200)
+        for f in result:
+            try:
+                if (f.screen_name or '').lower() == author_username.lower():
+                    return True
+            except Exception:
+                continue
         pages = 1
         while pages < max_pages:
             try:
                 result = await result.next()
                 if not result:
                     break
-                for user in result:
-                    ids.add(str(user.id))
+                for f in result:
+                    try:
+                        if (f.screen_name or '').lower() == author_username.lower():
+                            return True
+                    except Exception:
+                        continue
                 pages += 1
             except Exception:
                 break
-    except Exception as e:
-        error = str(e)
-    return ids, error
+    except Exception:
+        pass
+    return False
 
 
 async def pick_winners_async(tweet_url, num_winners, require_retweet, require_follow):
@@ -220,11 +226,16 @@ async def pick_winners_async(tweet_url, num_winners, require_retweet, require_fo
 
     errors = []
     if require_follow and author_username:
-        follower_ids, fid_error = await fetch_follower_ids(client, author_username)
-        if follower_ids:
-            retweeters = [u for u in retweeters if str(u['id']) in follower_ids]
+        eligible = []
+        # Check each retweeter directly — only need enough to fill winners + pool
+        check_limit = min(len(retweeters), max(num_winners * 6, 15))
+        for user in retweeters[:check_limit]:
+            if await check_follows(client, user['id'], author_username):
+                eligible.append(user)
+        if eligible:
+            retweeters = eligible
         else:
-            errors.append('Could not fetch follower list — showing all retweeters.')
+            errors.append('No followers found among retweeters — showing all retweeters.')
 
     winners = retweeters[:num_winners]
     remaining = retweeters[num_winners:]
