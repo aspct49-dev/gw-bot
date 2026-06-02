@@ -6,6 +6,7 @@ import random
 import secrets
 import hashlib
 from random import shuffle
+from datetime import datetime, timezone
 import requests as req_lib
 from itertools import islice
 from flask import Flask, request, session, send_from_directory, jsonify
@@ -90,16 +91,16 @@ class _SafeDict(dict):
 
 def _make_safe(data):
     safe = _SafeDict(data)
-    if 'legacy' in safe and isinstance(safe['legacy'], dict):
-        leg = _SafeDict(safe['legacy'])
-        if 'entities' in leg and isinstance(leg['entities'], dict):
-            ent = leg['entities']
-            if 'description' in ent and isinstance(ent['description'], dict):
-                ent['description'] = _SafeDict(ent['description'])
-            if 'url' in ent and isinstance(ent['url'], dict):
-                ent['url'] = _SafeDict(ent['url'])
-            leg['entities'] = _SafeDict(ent)
-        safe['legacy'] = leg
+    leg_raw = safe.get('legacy')
+    leg = _SafeDict(leg_raw) if isinstance(leg_raw, dict) else _SafeDict()
+    if isinstance(leg_raw, dict) and isinstance(leg.get('entities'), dict):
+        ent = leg['entities']
+        if isinstance(ent.get('description'), dict):
+            ent['description'] = _SafeDict(ent['description'])
+        if isinstance(ent.get('url'), dict):
+            ent['url'] = _SafeDict(ent['url'])
+        leg['entities'] = _SafeDict(ent)
+    safe['legacy'] = leg
     return safe
 
 _orig_user_init = twikit.user.User.__init__
@@ -147,14 +148,45 @@ def parse_tweet_url(tweet_url):
 
 def _user_dict(user):
     avatar = (getattr(user, 'profile_image_url', '') or '').replace('_normal.', '_400x400.')
+    username = (getattr(user, 'screen_name', '') or '').strip()
+    name = getattr(user, 'name', '') or username
     return {
         'id': user.id,
-        'username': user.screen_name,
-        'name': user.name,
+        'username': username,
+        'name': name,
         'avatar': avatar,
         'bio': getattr(user, 'description', '') or '',
         'location': getattr(user, 'location', '') or '',
+        'followers_count': getattr(user, 'followers_count', 0) or 0,
+        'created_at': str(getattr(user, 'created_at', '') or ''),
     }
+
+
+def _account_age_days(s):
+    for fmt in ('%a %b %d %H:%M:%S +0000 %Y', '%Y-%m-%dT%H:%M:%S.%fZ', '%Y-%m-%dT%H:%M:%SZ'):
+        try:
+            dt = datetime.strptime(str(s), fmt).replace(tzinfo=timezone.utc)
+            return (datetime.now(timezone.utc) - dt).days
+        except ValueError:
+            continue
+    return 0
+
+
+def _has_custom_avatar(avatar):
+    return bool(avatar) and 'default_profile_images' not in avatar
+
+
+def apply_profile_filters(pool, min_followers, min_account_age_days, require_profile_pic):
+    out = []
+    for u in pool:
+        if min_followers > 0 and (u.get('followers_count') or 0) < min_followers:
+            continue
+        if min_account_age_days > 0 and _account_age_days(u.get('created_at', '')) < min_account_age_days:
+            continue
+        if require_profile_pic and not _has_custom_avatar(u.get('avatar', '')):
+            continue
+        out.append(u)
+    return out
 
 
 
@@ -163,7 +195,9 @@ async def fetch_all_users(fetch_func, tweet_id, max_pages=10):
     users = []
     result = await fetch_func(tweet_id, count=100)
     for user in result:
-        users.append(_user_dict(user))
+        d = _user_dict(user)
+        if d.get('username'):
+            users.append(d)
     pages = 1
     while pages < max_pages:
         try:
@@ -171,7 +205,9 @@ async def fetch_all_users(fetch_func, tweet_id, max_pages=10):
             if not result:
                 break
             for user in result:
-                users.append(_user_dict(user))
+                d = _user_dict(user)
+                if d.get('username'):
+                    users.append(d)
             pages += 1
         except Exception:
             break
@@ -209,20 +245,57 @@ async def check_follows(client, user_id, author_username, max_pages=3):
     return False
 
 
-async def pick_winners_async(tweet_url, num_winners, require_retweet, require_follow):
+
+
+async def pick_winners_async(tweet_url, num_winners, require_retweet, require_follow,
+                              min_followers=0, min_account_age_days=0, require_profile_pic=False):
     tweet_id, author_username = parse_tweet_url(tweet_url)
     client = make_client()
     errors = []
     server_seed, seed_hash = make_seed()
 
-    # Always use retweeters as the base pool — gives a verifiable set of participants
-    pool = await fetch_all_users(client.get_retweeters, tweet_id)
-    if not pool:
-        raise ValueError('No participants found. Make sure the tweet has retweets.')
+    fetch_tasks = []
+    task_keys = []
+    if require_retweet:
+        fetch_tasks.append(fetch_all_users(client.get_retweeters, tweet_id))
+        task_keys.append('retweet')
+    # Follow-only mode: fall back to retweeters as proxy pool
+    if not fetch_tasks:
+        fetch_tasks.append(fetch_all_users(client.get_retweeters, tweet_id))
+        task_keys.append('retweet')
+
+    pool_results = await asyncio.gather(*fetch_tasks, return_exceptions=True)
+    pools = {}
+    for key, result in zip(task_keys, pool_results):
+        if isinstance(result, Exception):
+            errors.append(f'Could not fetch {key}s: {result}')
+            pools[key] = None  # None = API failure, excluded from intersection
+        else:
+            pools[key] = result  # [] = no results (kept), [...] = has users
+
+    # Only exclude pools that failed outright; empty [] pools stay in intersection
+    active_pools = {k: v for k, v in pools.items() if v is not None}
+    if not active_pools:
+        raise ValueError('No participants found. Make sure the tweet has the required engagement.')
+
+    pool_values = list(active_pools.values())
+    if len(pool_values) == 1:
+        pool = list(pool_values[0])
+    else:
+        id_sets = [set(u['id'] for u in p) for p in pool_values]
+        common_ids = id_sets[0]
+        for s in id_sets[1:]:
+            common_ids &= s
+        pool = [u for u in pool_values[0] if u['id'] in common_ids]
+
     num_pool = len(pool)
     seeded_shuffle(pool, server_seed)
 
-    if require_follow and author_username:
+    pool = apply_profile_filters(pool, min_followers, min_account_age_days, require_profile_pic)
+    if not pool and num_pool > 0:
+        errors.append('No users passed account filters — try relaxing requirements.')
+
+    if require_follow and author_username and pool:
         eligible = []
         check_limit = min(len(pool), max(num_winners * 6, 15))
         for user in pool[:check_limit]:
@@ -231,7 +304,7 @@ async def pick_winners_async(tweet_url, num_winners, require_retweet, require_fo
         if eligible:
             pool = eligible
         else:
-            errors.append('No followers found among retweeters — showing all retweeters.')
+            errors.append('No followers found among eligible users — showing all eligible users.')
 
     winners = pool[:num_winners]
     remaining = pool[num_winners:]
@@ -271,50 +344,77 @@ DRAW_PAGE_TEMPLATE = """<!DOCTYPE html>
 <meta name="twitter:title" content="{{ og_title }}">
 <meta name="twitter:description" content="{{ og_desc }}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Epilogue:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Plus Jakarta Sans',-apple-system,sans-serif;background:#eef2fb;color:#0f1c3f;min-height:100vh;-webkit-font-smoothing:antialiased}
-.page{max-width:720px;margin:0 auto;padding:32px 20px 60px}
-.header{text-align:center;margin-bottom:32px}
-.logo{font-size:22px;font-weight:800;color:#2454d6;letter-spacing:-.02em;margin-bottom:12px}
-.draw-meta{font-size:13.5px;color:#64748b;line-height:1.7}
+body{font-family:'Epilogue',-apple-system,sans-serif;background:#fff;color:#0d1832;min-height:100vh;-webkit-font-smoothing:antialiased}
+/* Nav */
+.nav{background:#fff;border-bottom:1px solid #e6edf8;padding:0 36px;height:72px;display:flex;align-items:center}
+.nav-logo{height:48px;width:auto;display:block}
+/* Page */
+.page{max-width:760px;margin:0 auto;padding:44px 24px 80px}
+/* Header */
+.header{text-align:center;margin-bottom:40px}
+.draw-title{font-size:28px;font-weight:800;letter-spacing:-.025em;color:#0d1832;margin-bottom:8px}
+.draw-meta{font-size:13.5px;color:#5c6c8a;line-height:1.7}
 .draw-meta a{color:#2454d6;text-decoration:none}
-.meta-pills{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:10px}
-.meta-pill{background:#fff;border:1px solid #dde3f0;border-radius:999px;padding:4px 13px;font-size:12px;font-weight:600;color:#64748b}
-.section-title{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#94a3b8;margin-bottom:16px}
-.winners{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;margin-bottom:32px}
-.winner-card{background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 2px 12px rgba(15,35,100,.07)}
-.winner-avatar{width:100%;aspect-ratio:1;object-fit:cover;background:#dde3f0;display:block}
-.winner-avatar-placeholder{width:100%;aspect-ratio:1;background:linear-gradient(135deg,#dde3f0,#c7d2ea);display:flex;align-items:center;justify-content:center;font-size:40px;color:#94a3b8}
+.draw-meta a:hover{text-decoration:underline}
+.meta-pills{display:flex;flex-wrap:wrap;justify-content:center;gap:7px;margin-top:12px}
+.meta-pill{background:#eef2fd;border:1px solid rgba(36,84,214,.14);border-radius:999px;padding:5px 13px;font-size:12px;font-weight:600;color:#1c3aa8}
+/* Winners */
+.section-title{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#8a9ab8;margin-bottom:18px}
+.winners{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:16px;margin-bottom:36px}
+.winner-card{background:#fff;border:1px solid #dde8f8;border-radius:18px;overflow:hidden;box-shadow:0 2px 4px rgba(15,30,70,.04),0 8px 24px -10px rgba(15,30,70,.1);transition:box-shadow .2s,border-color .2s}
+.winner-card:hover{border-color:rgba(36,84,214,.28);box-shadow:0 4px 8px rgba(15,30,70,.06),0 14px 32px -12px rgba(36,84,214,.2)}
+.winner-avatar{width:100%;aspect-ratio:1;object-fit:cover;background:#eef2fd;display:block}
+.winner-avatar-placeholder{width:100%;aspect-ratio:1;background:linear-gradient(135deg,#eef2fd,#dde8f8);display:flex;align-items:center;justify-content:center;font-size:44px;color:#b4c8ec}
 .winner-info{padding:14px 16px}
-.winner-num{font-size:11px;font-weight:700;color:#94a3b8;letter-spacing:.06em;text-transform:uppercase;margin-bottom:4px}
-.winner-name{font-size:15px;font-weight:700;color:#0f1c3f;letter-spacing:-.01em;margin-bottom:2px}
+.winner-num{font-size:11px;font-weight:700;color:#8a9ab8;letter-spacing:.06em;text-transform:uppercase;margin-bottom:5px}
+.winner-name{font-size:15px;font-weight:700;color:#0d1832;letter-spacing:-.01em;margin-bottom:3px}
 .winner-handle{font-family:'IBM Plex Mono',monospace;font-size:12px;color:#2454d6;margin-bottom:8px}
-.winner-bio{font-size:12px;color:#64748b;line-height:1.5;margin-bottom:6px;word-break:break-word}
-.winner-location{font-size:11.5px;color:#94a3b8}
-.profile-btn{display:block;margin:12px 16px 14px;padding:9px;background:#f0f4ff;border:1.5px solid #c7d2f5;border-radius:10px;text-align:center;font-size:13px;font-weight:600;color:#2454d6;text-decoration:none}
-.fair{background:#fff;border-radius:14px;padding:18px 20px;box-shadow:0 2px 12px rgba(15,35,100,.07);margin-bottom:24px}
-.fair-title{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#94a3b8;margin-bottom:12px}
-.fair-row{display:flex;gap:10px;margin-bottom:8px}
-.fair-key{font-size:10.5px;font-weight:700;color:#94a3b8;text-transform:uppercase;width:46px;flex-shrink:0}
-.fair-val{font-family:'IBM Plex Mono',monospace;font-size:10px;color:#64748b;word-break:break-all;background:#f8faff;padding:5px 8px;border-radius:6px;border:1px solid #dde3f0;flex:1;user-select:all}
-.fair-hint{font-size:11px;color:#94a3b8;margin-top:10px;line-height:1.55}
+.winner-bio{font-size:12px;color:#5c6c8a;line-height:1.5;margin-bottom:6px;word-break:break-word}
+.winner-location{font-size:11.5px;color:#8a9ab8}
+.profile-btn{display:block;margin:10px 16px 14px;padding:9px;background:#eef2fd;border:1.5px solid rgba(36,84,214,.22);border-radius:10px;text-align:center;font-size:13px;font-weight:600;color:#2454d6;text-decoration:none;transition:background .15s}
+.profile-btn:hover{background:#e0e8fb}
+/* Fair */
+.fair{background:#fff;border:1px solid #dde8f8;border-radius:14px;padding:18px 20px;margin-bottom:28px;box-shadow:0 1px 3px rgba(15,30,70,.04)}
+.fair-title{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#8a9ab8;margin-bottom:14px;display:flex;align-items:center;gap:7px}
+.fair-title::before{content:'';display:inline-block;width:7px;height:7px;border-radius:50%;background:rgba(36,84,214,.45);box-shadow:0 0 0 2.5px rgba(36,84,214,.14)}
+.fair-row{display:flex;align-items:baseline;gap:10px;margin-bottom:8px}
+.fair-key{font-size:10.5px;font-weight:700;color:#8a9ab8;text-transform:uppercase;letter-spacing:.06em;width:52px;flex-shrink:0}
+.fair-val{font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5c6c8a;word-break:break-all;background:#fafcff;padding:5px 8px;border-radius:6px;border:1px solid #dde8f8;flex:1;user-select:all;cursor:pointer}
+.fair-val:hover{border-color:rgba(36,84,214,.3)}
+.fair-hint{font-size:11px;color:#8a9ab8;margin-top:10px;line-height:1.55}
 .fair-hint a{color:#2454d6;text-decoration:none}
-.footer{text-align:center;font-size:12px;color:#94a3b8;margin-top:32px}
-@media(max-width:480px){.winners{grid-template-columns:1fr 1fr}}
+.fair-hint a:hover{text-decoration:underline}
+/* Footer */
+.footer{border-top:1px solid #e6edf8;padding-top:28px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.footer-logo{height:28px;width:auto;display:block;opacity:.7}
+.footer-text{font-size:12px;color:#8a9ab8}
+@media(max-width:520px){
+  .nav{padding:0 20px}
+  .winners{grid-template-columns:1fr 1fr}
+  .footer{flex-direction:column;text-align:center}
+}
 </style>
 </head>
 <body>
+<nav class="nav">
+  <img class="nav-logo" src="/drawr-logo.png" alt="drawr">
+</nav>
 <div class="page">
   <div class="header">
-    <div class="logo">Doug's Giveaway Bot</div>
+    <div class="draw-title" id="draw-title">Giveaway Results</div>
     <div class="draw-meta" id="draw-meta"></div>
   </div>
   <div class="section-title">Winners</div>
   <div class="winners" id="winners"></div>
   <div id="fair-section"></div>
-  <div class="footer">Powered by Doug's Giveaway Bot &mdash; Provably Fair</div>
+  <div class="footer">
+    <img class="footer-logo" src="/drawr-logo.png" alt="drawr">
+    <span class="footer-text">Powered by drawr &mdash; Provably Fair</span>
+  </div>
 </div>
 <script>
 var DRAW = {{ data_json | safe }};
@@ -325,8 +425,10 @@ function esc(s) {
 }
 
 var meta = document.getElementById('draw-meta');
+var titleEl = document.getElementById('draw-title');
 if (isYoutube) {
   var url = DRAW.video_url || '';
+  titleEl.textContent = DRAW.winners.length + ' Winner' + (DRAW.winners.length !== 1 ? 's' : '') + ' Drawn';
   var pills = '<span class="meta-pill">' + ((DRAW.commenters||0).toLocaleString()) + ' commenters</span>';
   pills += '<span class="meta-pill">' + DRAW.winners.length + ' winner' + (DRAW.winners.length !== 1 ? 's' : '') + '</span>';
   if (DRAW.keyword) pills += '<span class="meta-pill">Keyword: &ldquo;' + esc(DRAW.keyword) + '&rdquo;</span>';
@@ -334,10 +436,14 @@ if (isYoutube) {
 } else {
   var turl = DRAW.tweet_url || '';
   var author = DRAW.author || '';
+  titleEl.textContent = DRAW.winners.length + ' Winner' + (DRAW.winners.length !== 1 ? 's' : '') + ' Drawn';
   var pills = '<span class="meta-pill">' + ((DRAW.eligible||0).toLocaleString()) + ' eligible</span>';
   pills += '<span class="meta-pill">' + DRAW.winners.length + ' winner' + (DRAW.winners.length !== 1 ? 's' : '') + '</span>';
   if (DRAW.retweet) pills += '<span class="meta-pill">&#10003; Reposted</span>';
   if (DRAW.follow) pills += '<span class="meta-pill">&#10003; Follows @' + esc(author) + '</span>';
+  if (DRAW.require_profile_pic) pills += '<span class="meta-pill">&#10003; Has profile pic</span>';
+  if (DRAW.min_followers) pills += '<span class="meta-pill">&#10003; ' + Number(DRAW.min_followers).toLocaleString() + '+ followers</span>';
+  if (DRAW.min_account_age_days) pills += '<span class="meta-pill">&#10003; Account ' + DRAW.min_account_age_days + '+ days old</span>';
   meta.innerHTML = '<div>From a post by <a href="https://twitter.com/' + esc(author) + '" target="_blank" rel="noreferrer">@' + esc(author) + '</a></div><div class="meta-pills">' + pills + '</div>';
 }
 
@@ -485,6 +591,219 @@ def debug_env():
 def index():
     return send_from_directory(os.path.join(BASE_DIR, 'prototype'), 'Giveaway Picker.html')
 
+@app.route('/drawr-logo.png')
+def drawr_logo():
+    return send_from_directory(os.path.join(BASE_DIR, 'prototype'), 'drawr-logo.png')
+
+
+_PAGE_BASE = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{title} — drawr</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Epilogue:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{{box-sizing:border-box;margin:0;padding:0}}
+body{{font-family:'Epilogue',-apple-system,sans-serif;background:#fff;color:#0d1832;-webkit-font-smoothing:antialiased;line-height:1.6}}
+a{{color:#2454d6;text-decoration:none}}a:hover{{text-decoration:underline}}
+.nav{{background:#fff;border-bottom:1px solid #e6edf8;padding:0 36px;height:72px;display:flex;align-items:center;position:sticky;top:0;z-index:100}}
+.nav-logo{{height:48px;width:auto;display:block}}
+.page{{max-width:760px;margin:0 auto;padding:56px 24px 96px}}
+.eyebrow{{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#2454d6;margin-bottom:14px;display:flex;align-items:center;gap:8px}}
+.eyebrow::before{{content:'';width:18px;height:1.5px;background:#2454d6;opacity:.5}}
+h1{{font-size:32px;font-weight:800;letter-spacing:-.025em;margin-bottom:10px}}
+.sub{{font-size:16px;color:#5c6c8a;margin-bottom:48px;line-height:1.65}}
+h2{{font-size:18px;font-weight:700;letter-spacing:-.01em;margin:36px 0 10px}}
+h2:first-of-type{{margin-top:0}}
+p{{font-size:14.5px;color:#5c6c8a;margin-bottom:14px;line-height:1.75}}
+ul,ol{{padding-left:22px;margin-bottom:14px}}
+li{{font-size:14.5px;color:#5c6c8a;line-height:1.75;margin-bottom:4px}}
+.card-grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;margin:24px 0 36px}}
+.card{{background:#fafcff;border:1px solid #dde8f8;border-radius:14px;padding:20px 22px}}
+.card-icon{{font-size:22px;margin-bottom:10px}}
+.card-title{{font-size:14px;font-weight:700;color:#0d1832;margin-bottom:5px}}
+.card-body{{font-size:13px;color:#66768f;line-height:1.6}}
+.pill{{display:inline-flex;align-items:center;gap:6px;background:#eef2fd;color:#1c3aa8;padding:5px 12px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid rgba(36,84,214,.14);margin:3px}}
+.divider{{border:0;border-top:1px solid #e6edf8;margin:36px 0}}
+.footer{{background:#f7f9fd;border-top:1px solid #e0eaf6;padding:32px 36px;text-align:center;font-size:12.5px;color:#8a9ab8;margin-top:auto}}
+.footer a{{color:#66768f}}
+@media(max-width:520px){{.page{{padding:36px 16px 72px}};h1{{font-size:26px}}}}
+</style>
+</head>
+<body>
+<nav class="nav">
+  <a href="/"><img class="nav-logo" src="/drawr-logo.png" alt="drawr"></a>
+</nav>
+<div class="page">{body}</div>
+<footer class="footer">
+  © 2026 drawr &mdash;
+  <a href="/about">About</a> &middot;
+  <a href="/features">Features</a> &middot;
+  <a href="/privacy">Privacy Policy</a> &middot;
+  <a href="/terms">Terms of Service</a> &middot;
+  <a href="/">Back to app</a>
+</footer>
+</body>
+</html>"""
+
+def _page(title, body):
+    from flask import render_template_string
+    return render_template_string(_PAGE_BASE.format(title=title, body=body))
+
+
+@app.route('/about')
+def page_about():
+    body = """
+<div class="eyebrow">Company</div>
+<h1>About drawr</h1>
+<p class="sub">drawr makes online giveaways fair, transparent, and verifiable — for creators and their communities.</p>
+
+<h2>Our mission</h2>
+<p>Giveaways should be trustworthy. Whether you're running a contest for 100 followers or 100,000, every participant deserves to know the winner was chosen fairly. drawr was built to make that a given.</p>
+<p>We use seeded, provably-fair randomization so anyone can independently verify results. No black boxes, no tampering — just a transparent draw your audience can trust.</p>
+
+<h2>What we support</h2>
+<div class="card-grid">
+  <div class="card"><div class="card-icon">𝕏</div><div class="card-title">X (Twitter) Picker</div><div class="card-body">Draw winners from reposts and followers on any X post, with optional account filters.</div></div>
+  <div class="card"><div class="card-icon">▶</div><div class="card-title">YouTube Picker</div><div class="card-body">Pick winners from video comment sections, with optional keyword filtering.</div></div>
+  <div class="card"><div class="card-icon">🟢</div><div class="card-title">Kick Giveaway</div><div class="card-body">Collect live chat entries by keyword and spin a winner in real time.</div></div>
+  <div class="card"><div class="card-icon">🎡</div><div class="card-title">Wheel</div><div class="card-body">Add any list of names and spin a customisable prize wheel for instant picks.</div></div>
+</div>
+
+<h2>Provably fair</h2>
+<p>Every draw generates a random seed and its SHA-256 hash. The hash is shown upfront — before winners are revealed — so you can verify the seed wasn't chosen after the fact. Anyone can check the result using a free online SHA-256 tool.</p>
+
+<hr class="divider">
+<p style="font-size:13px;color:#8a9ab8">drawr is an independent tool built for creators.</p>
+"""
+    return _page('About', body)
+
+
+@app.route('/features')
+def page_features():
+    body = """
+<div class="eyebrow">Features</div>
+<h1>Everything you need for a fair draw</h1>
+<p class="sub">drawr packs powerful giveaway tools into a clean, no-fuss interface.</p>
+
+<h2>Multi-platform support</h2>
+<p>Run giveaways across X (Twitter), YouTube, Kick live chat, or any custom list — all from one place.</p>
+
+<h2>Provably fair randomization</h2>
+<p>Results are generated using a seeded shuffle (SHA-256). The hash is published before the draw, so anyone can independently verify the outcome wasn't manipulated.</p>
+<div style="margin:8px 0 20px">
+  <span class="pill">&#10003; Seeded shuffle</span>
+  <span class="pill">&#10003; SHA-256 verification</span>
+  <span class="pill">&#10003; Shareable proof</span>
+</div>
+
+<h2>Account filters (X)</h2>
+<p>Exclude low-quality entries before the draw with optional filters:</p>
+<ul>
+  <li>Minimum follower count</li>
+  <li>Minimum account age (in days)</li>
+  <li>Must have a custom profile picture</li>
+</ul>
+
+<h2>Follow verification (X)</h2>
+<p>Optionally require that entrants follow the post author. drawr checks each eligible user's following list directly via the Twitter API.</p>
+
+<h2>Reroll</h2>
+<p>Not happy with a winner? Check the box next to any winner and reroll just those slots — the rest stay locked in.</p>
+
+<h2>Shareable results</h2>
+<p>Save any draw to a permanent link and share it with your audience. The results page includes winner profiles, criteria, and the full fairness proof.</p>
+
+<h2>Keyword filtering (YouTube)</h2>
+<p>Only draw from comments that contain a specific word or phrase — useful for "comment ENTER to win" style giveaways.</p>
+
+<h2>Live Kick giveaways</h2>
+<p>Connect to any Kick channel's live chat, collect entries by keyword in real time, and spin a winner with a slot-machine animation.</p>
+
+<h2>Prize wheel</h2>
+<p>Add any list of names — typed or pasted comma-separated — and spin a colourful prize wheel. Optional auto-removal keeps each spin drawing unique winners.</p>
+"""
+    return _page('Features', body)
+
+
+@app.route('/privacy')
+def page_privacy():
+    body = """
+<div class="eyebrow">Legal</div>
+<h1>Privacy Policy</h1>
+<p class="sub">Last updated: June 2, 2026</p>
+
+<h2>Overview</h2>
+<p>drawr ("we", "us", or "our") is committed to protecting your privacy. This policy explains what information we collect, how we use it, and your rights regarding that information.</p>
+
+<h2>Information we collect</h2>
+<p>drawr does not require account registration. We collect only what is necessary to operate the service:</p>
+<ul>
+  <li><strong>Draw data you submit:</strong> When you save a draw result, we store the winner list, entry criteria, and fairness proof in our database (Supabase). This data is associated with a random draw ID, not your identity.</li>
+  <li><strong>Twitter/X data:</strong> When you run an X giveaway, drawr fetches public retweet and follower data from the Twitter API on your behalf. This data is processed in memory and not retained beyond the draw session, unless you choose to save the results.</li>
+  <li><strong>YouTube data:</strong> Comments are fetched from public videos via the YouTube Comment Downloader. No YouTube account credentials are required or stored.</li>
+  <li><strong>Kick data:</strong> Chat messages are received via Kick's public WebSocket API. No Kick credentials are required or stored.</li>
+</ul>
+
+<h2>Cookies and tracking</h2>
+<p>drawr uses a single session cookie to maintain your Flask session. We do not use advertising cookies, third-party trackers, or analytics services.</p>
+
+<h2>Data retention</h2>
+<p>Saved draw results are stored indefinitely so shareable links remain valid. You can request deletion of any draw by contacting us with the draw ID.</p>
+
+<h2>Third-party services</h2>
+<p>We use Supabase to store draw results. Please refer to <a href="https://supabase.com/privacy">Supabase's privacy policy</a> for details on how they handle data.</p>
+
+<h2>Children's privacy</h2>
+<p>drawr is not directed at children under the age of 13. We do not knowingly collect personal information from children.</p>
+
+<h2>Changes to this policy</h2>
+<p>We may update this policy from time to time. Changes will be reflected on this page with an updated date.</p>
+
+"""
+    return _page('Privacy Policy', body)
+
+
+@app.route('/terms')
+def page_terms():
+    body = """
+<div class="eyebrow">Legal</div>
+<h1>Terms of Service</h1>
+<p class="sub">Last updated: June 2, 2026</p>
+
+<h2>Acceptance of terms</h2>
+<p>By using drawr ("the Service"), you agree to be bound by these Terms of Service. If you do not agree, please do not use the Service.</p>
+
+<h2>Use of the service</h2>
+<p>You may use drawr to conduct giveaways, raffles, and similar selection events for lawful purposes. You agree not to:</p>
+<ul>
+  <li>Use the Service to violate any applicable law or regulation</li>
+  <li>Abuse or overload Twitter, YouTube, or Kick APIs through the Service</li>
+  <li>Attempt to manipulate draw outcomes or misrepresent results to participants</li>
+  <li>Use the Service in a way that interferes with or disrupts its infrastructure</li>
+</ul>
+
+<h2>Third-party platforms</h2>
+<p>drawr interacts with third-party APIs (Twitter/X, YouTube, Kick) on your behalf. You are responsible for ensuring your use of those platforms complies with their respective terms of service. drawr is not affiliated with, endorsed by, or sponsored by any of these platforms.</p>
+
+<h2>Saved draw results</h2>
+<p>When you save a draw, the results are stored and accessible via a shareable link. You are responsible for the content of draws you share publicly. drawr reserves the right to remove saved draws that violate these terms.</p>
+
+<h2>No warranty</h2>
+<p>The Service is provided "as is" without warranty of any kind, express or implied. We do not guarantee uninterrupted access, accuracy of third-party data, or fitness for any particular purpose.</p>
+
+<h2>Limitation of liability</h2>
+<p>To the fullest extent permitted by law, drawr shall not be liable for any indirect, incidental, special, or consequential damages arising from your use of the Service.</p>
+
+<h2>Modifications</h2>
+<p>We reserve the right to modify these terms at any time. Continued use of the Service after changes constitutes acceptance of the revised terms.</p>
+
+"""
+    return _page('Terms of Service', body)
+
 
 @app.route('/api/pick', methods=['POST'])
 def api_pick():
@@ -493,15 +812,28 @@ def api_pick():
     num_winners = max(1, int(data.get('num', 1)))
     require_retweet = bool(data.get('retweet', True))
     require_follow = bool(data.get('follow', False))
+    try:
+        min_followers = max(0, int(data.get('min_followers') or 0))
+    except (TypeError, ValueError):
+        min_followers = 0
+    try:
+        min_account_age_days = max(0, int(data.get('min_account_age_days') or 0))
+    except (TypeError, ValueError):
+        min_account_age_days = 0
+    require_profile_pic = bool(data.get('require_profile_pic', False))
 
     if not tweet_url:
         return jsonify(error='Tweet URL is required.')
-    if not require_retweet and not require_follow:
-        return jsonify(error='Select at least one requirement.')
+    has_req = require_retweet or require_follow
+    if not has_req:
+        return jsonify(error='Select at least one entry requirement.')
 
     try:
         result = asyncio.run(
-            pick_winners_async(tweet_url, num_winners, require_retweet, require_follow)
+            pick_winners_async(tweet_url, num_winners, require_retweet, require_follow,
+                               min_followers=min_followers,
+                               min_account_age_days=min_account_age_days,
+                               require_profile_pic=require_profile_pic)
         )
     except ValueError as e:
         return jsonify(error=str(e))
@@ -585,6 +917,33 @@ def api_twitter_reroll():
     remaining = data.get('remaining', [])
     updated, pool, seed, seed_hash = _do_reroll(current_winners, remaining, reroll_ids)
     return jsonify(winners=updated, remaining=pool, seed=seed, seed_hash=seed_hash)
+
+
+@app.route('/api/kick/chatroom')
+def api_kick_chatroom():
+    channel = (request.args.get('channel') or '').strip().lower()
+    if not channel:
+        return jsonify(error='Channel name is required.')
+    try:
+        r = req_lib.get(
+            f'https://kick.com/api/v2/channels/{channel}',
+            headers={
+                'Accept': 'application/json',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            },
+            timeout=10
+        )
+        if r.status_code == 404:
+            return jsonify(error=f'Channel "{channel}" not found on Kick.')
+        if not r.ok:
+            return jsonify(error=f'Kick API returned {r.status_code}.')
+        data = r.json()
+        chatroom_id = (data.get('chatroom') or {}).get('id')
+        if not chatroom_id:
+            return jsonify(error='Could not find chatroom for this channel.')
+        return jsonify(chatroomId=chatroom_id, channel=data.get('slug', channel))
+    except Exception as e:
+        return jsonify(error=f'Failed to look up channel: {e}'), 500
 
 
 if __name__ == '__main__':

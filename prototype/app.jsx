@@ -2,13 +2,23 @@
 
 const { useState: useS, useRef: useR } = React;
 
-const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
-  "direction": "cobalt",
-  "accent": "#2454d6",
-  "radius": 13,
-  "ambient": true,
-  "glass": true
-}/*EDITMODE-END*/;
+function WheelHeroIcon() {
+  const colors = ['#2454d6','#7c3aed','#db2777','#ea580c','#16a34a','#0891b2'];
+  const n = colors.length, cx = 27, cy = 27, r = 24;
+  return (
+    <svg className="hero-icon" style={{borderRadius:'50%'}} width="54" height="54" viewBox="0 0 54 54">
+      {colors.map((color, i) => {
+        const a0 = (i / n) * 2 * Math.PI - Math.PI / 2;
+        const a1 = ((i + 1) / n) * 2 * Math.PI - Math.PI / 2;
+        const x0 = (cx + r * Math.cos(a0)).toFixed(2), y0 = (cy + r * Math.sin(a0)).toFixed(2);
+        const x1 = (cx + r * Math.cos(a1)).toFixed(2), y1 = (cy + r * Math.sin(a1)).toFixed(2);
+        return <path key={i} d={`M${cx},${cy} L${x0},${y0} A${r},${r} 0 0,1 ${x1},${y1} Z`} fill={color} />;
+      })}
+      <circle cx={cx} cy={cy} r="8" fill="white" />
+    </svg>
+  );
+}
+
 
 function looksValid(url) {
   const u = (url || '').trim();
@@ -16,8 +26,6 @@ function looksValid(url) {
 }
 
 function App() {
-  const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
-
   const [screen, setScreen] = useS('twitter');   // twitter | twitterResults | youtube | youtubeResults
   const [loading, setLoading] = useS(false);
   const [error, setError] = useS('');
@@ -25,7 +33,7 @@ function App() {
   const [ytData, setYtData] = useS(null);
   const abortRef = useR(null);
 
-  const tab = screen.startsWith('youtube') ? 'youtube' : 'twitter';
+  const tab = screen.startsWith('youtube') ? 'youtube' : screen.startsWith('kick') ? 'kick' : screen.startsWith('wheel') ? 'wheel' : 'twitter';
 
   const goTab = (key) => {
     if (abortRef.current) abortRef.current.abort();
@@ -45,7 +53,13 @@ function App() {
       const res = await fetch('/api/pick', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: form.url, num: form.num, retweet: form.retweet, follow: form.follow }),
+        body: JSON.stringify({
+          url: form.url, num: form.num,
+          retweet: form.retweet, follow: form.follow,
+          min_followers: form.minFollowers || 0,
+          min_account_age_days: form.minAccountAge || 0,
+          require_profile_pic: form.requireProfilePic || false,
+        }),
         signal: ctrl.signal,
       });
       const data = await res.json();
@@ -54,6 +68,8 @@ function App() {
         url: form.url, winners: data.winners, remaining: data.remaining || [],
         retweeters: data.retweeters, eligible: data.eligible,
         retweet: form.retweet, follow: form.follow, author: data.author,
+        minFollowers: form.minFollowers || 0, minAccountAge: form.minAccountAge || 0,
+        requireProfilePic: form.requireProfilePic || false,
         seed: data.seed, seedHash: data.seed_hash,
       });
       setScreen('twitterResults');
@@ -140,8 +156,12 @@ function App() {
     type: 'twitter',
     tweet_url: twData.url, author: twData.author,
     winners: twData.winners, eligible: twData.eligible,
-    retweeters: twData.retweeters, retweet: twData.retweet,
-    follow: twData.follow, seed: twData.seed, seed_hash: twData.seedHash,
+    retweeters: twData.retweeters,
+    retweet: twData.retweet, follow: twData.follow,
+    min_followers: twData.minFollowers || 0,
+    min_account_age_days: twData.minAccountAge || 0,
+    require_profile_pic: twData.requireProfilePic || false,
+    seed: twData.seed, seed_hash: twData.seedHash,
   }, setTwData, twData);
 
   const shareDrawYt = () => _saveAndShare({
@@ -175,12 +195,16 @@ function App() {
     }
   };
 
-  // ── Theme vars ──
-  const vars = buildVars(t.direction, t.accent, t.radius);
-  const themeAmbient = (THEMES[t.direction] || {}).vars['--ambient'];
-  vars['--ambient'] = t.ambient ? themeAmbient : '0';
+  const isResults = screen.endsWith('Results');
+  const showHero = !loading && !isResults;
 
-  const wide = screen.endsWith('Results');
+  const heroIconSrc = { twitter: 'icon-x.png', youtube: 'icon-youtube.png', kick: 'icon-kick.webp' }[tab] || null;
+  const heroSub = {
+    twitter: 'Draw verifiable giveaway winners from X posts. Fair, fast, and transparent.',
+    youtube: 'Draw winners from YouTube video comment sections.',
+    kick: 'Connect to a Kick channel, collect live chat entries, and spin a winner.',
+    wheel: 'Add any names, spin the wheel, and pick a winner instantly.',
+  }[tab] || '';
 
   let body;
   if (loading) {
@@ -198,39 +222,28 @@ function App() {
     body = <YoutubeForm error={error} onSubmit={pickYoutube} />;
   } else if (screen === 'youtubeResults') {
     body = <YoutubeResults data={ytData} onBack={() => goTab('youtube')} onReroll={rerollYoutube} onShare={shareDrawYt} />;
+  } else if (screen === 'kick') {
+    body = <KickGiveaway />;
+  } else if (screen === 'wheel') {
+    body = <WheelGiveaway />;
   }
 
   return (
-    <div className="stage" style={vars} data-glass={t.glass ? '1' : '0'}>
-      <div className={'card' + (wide ? ' wide' : '')}>
-        <Brand />
-        <Tabs active={tab} onSelect={goTab} />
-        {body}
-      </div>
-
-      <TweaksPanel title="Tweaks">
-        <TweakSection label="Direction" />
-        <TweakRadio value={t.direction}
-          options={[{ value: 'airy', label: 'Airy' },
-                    { value: 'cobalt', label: 'Cobalt' },
-                    { value: 'crisp', label: 'Crisp' }]}
-          onChange={(v) => setTweak('direction', v)} />
-
-        <TweakSection label="Accent" />
-        <TweakColor label="Blue" value={t.accent}
-          options={[ACCENTS.classic, ACCENTS.cobalt, ACCENTS.sky]}
-          onChange={(v) => setTweak('accent', v)} />
-
-        <TweakSection label="Shape" />
-        <TweakSlider label="Corner radius" value={t.radius} min={6} max={22} unit="px"
-          onChange={(v) => setTweak('radius', v)} />
-
-        <TweakSection label="Motion" />
-        <TweakToggle label="Ambient glow" value={t.ambient}
-          onChange={(v) => setTweak('ambient', v)} />
-        <TweakToggle label="Liquid glass" value={t.glass}
-          onChange={(v) => setTweak('glass', v)} />
-      </TweaksPanel>
+    <div className="page">
+      <Nav active={tab} onSelect={goTab} />
+      <main className="main">
+        {showHero && (
+          <div className="hero">
+            {tab === 'wheel' ? <WheelHeroIcon /> : <img className="hero-icon" src={heroIconSrc} alt="" />}
+            <h1 className="hero-title">PICK A WINNER</h1>
+            <p className="hero-sub">{heroSub}</p>
+          </div>
+        )}
+        <div className={'content-area' + (isResults ? ' wide' : '') + (tab === 'kick' ? ' kick' : '') + (tab === 'wheel' ? ' wheel' : '')}>
+          {body}
+        </div>
+      </main>
+      <Footer onSelect={goTab} />
     </div>
   );
 }
