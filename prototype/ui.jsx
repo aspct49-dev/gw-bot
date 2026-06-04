@@ -31,7 +31,7 @@ function WheelNavIcon() {
     return <path key={i} d={`M${cx},${cy} L${x0},${y0} A${r},${r} 0 0,1 ${x1},${y1} Z`} fill={color} />;
   });
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" style={{flexShrink:0}}>
+    <svg width="16" height="16" viewBox="-1 -1 18 18" style={{flexShrink:0}} overflow="visible">
       {segs}
       <circle cx={cx} cy={cy} r="2.6" fill="white" />
     </svg>
