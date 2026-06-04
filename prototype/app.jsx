@@ -6,7 +6,7 @@ function WheelHeroIcon() {
   const colors = ['#2454d6','#7c3aed','#db2777','#ea580c','#16a34a','#0891b2'];
   const n = colors.length, cx = 27, cy = 27, r = 24;
   return (
-    <svg className="hero-icon" style={{borderRadius:'50%'}} width="54" height="54" viewBox="0 0 54 54">
+    <svg className="hero-icon" viewBox="0 0 54 54" overflow="visible">
       {colors.map((color, i) => {
         const a0 = (i / n) * 2 * Math.PI - Math.PI / 2;
         const a1 = ((i + 1) / n) * 2 * Math.PI - Math.PI / 2;
