@@ -34,7 +34,7 @@ function App() {
   const abortRef = useR(null);
 
   const [theme, setTheme] = useS(() => {
-    try { return localStorage.getItem('drawr-theme') || 'light'; } catch { return 'light'; }
+    try { return localStorage.getItem('drawr-theme') || 'dark'; } catch { return 'dark'; }
   });
   useE(() => {
     document.documentElement.setAttribute('data-theme', theme);

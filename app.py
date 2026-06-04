@@ -348,50 +348,50 @@ DRAW_PAGE_TEMPLATE = """<!DOCTYPE html>
 <link href="https://fonts.googleapis.com/css2?family=Epilogue:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Epilogue',-apple-system,sans-serif;background:#fff;color:#0d1832;min-height:100vh;-webkit-font-smoothing:antialiased}
+body{font-family:'Epilogue',-apple-system,sans-serif;background:#0d1829;color:#e4ecfa;min-height:100vh;-webkit-font-smoothing:antialiased}
 /* Nav */
-.nav{background:#fff;border-bottom:1px solid #e6edf8;padding:0 36px;height:72px;display:flex;align-items:center}
+.nav{background:#0d1829;border-bottom:1px solid rgba(255,255,255,.08);padding:0 36px;height:72px;display:flex;align-items:center}
 .nav-logo{height:48px;width:auto;display:block}
 /* Page */
 .page{max-width:760px;margin:0 auto;padding:44px 24px 80px}
 /* Header */
 .header{text-align:center;margin-bottom:40px}
-.draw-title{font-size:28px;font-weight:800;letter-spacing:-.025em;color:#0d1832;margin-bottom:8px}
-.draw-meta{font-size:13.5px;color:#5c6c8a;line-height:1.7}
-.draw-meta a{color:#2454d6;text-decoration:none}
+.draw-title{font-size:28px;font-weight:800;letter-spacing:-.025em;color:#e4ecfa;margin-bottom:8px}
+.draw-meta{font-size:13.5px;color:#6a8ab0;line-height:1.7}
+.draw-meta a{color:#6da4f8;text-decoration:none}
 .draw-meta a:hover{text-decoration:underline}
 .meta-pills{display:flex;flex-wrap:wrap;justify-content:center;gap:7px;margin-top:12px}
-.meta-pill{background:#eef2fd;border:1px solid rgba(36,84,214,.14);border-radius:999px;padding:5px 13px;font-size:12px;font-weight:600;color:#1c3aa8}
+.meta-pill{background:rgba(36,84,214,.18);border:1px solid rgba(36,84,214,.28);border-radius:999px;padding:5px 13px;font-size:12px;font-weight:600;color:#93b4f0}
 /* Winners */
-.section-title{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#8a9ab8;margin-bottom:18px}
+.section-title{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#3d5a7e;margin-bottom:18px}
 .winners{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:16px;margin-bottom:36px}
-.winner-card{background:#fff;border:1px solid #dde8f8;border-radius:18px;overflow:hidden;box-shadow:0 2px 4px rgba(15,30,70,.04),0 8px 24px -10px rgba(15,30,70,.1);transition:box-shadow .2s,border-color .2s}
-.winner-card:hover{border-color:rgba(36,84,214,.28);box-shadow:0 4px 8px rgba(15,30,70,.06),0 14px 32px -12px rgba(36,84,214,.2)}
-.winner-avatar{width:100%;aspect-ratio:1;object-fit:cover;background:#eef2fd;display:block}
-.winner-avatar-placeholder{width:100%;aspect-ratio:1;background:linear-gradient(135deg,#eef2fd,#dde8f8);display:flex;align-items:center;justify-content:center;font-size:44px;color:#b4c8ec}
+.winner-card{background:#132040;border:1px solid rgba(255,255,255,.09);border-radius:18px;overflow:hidden;box-shadow:0 2px 4px rgba(0,0,0,.3),0 8px 24px -10px rgba(0,0,0,.4);transition:box-shadow .2s,border-color .2s}
+.winner-card:hover{border-color:rgba(36,84,214,.45);box-shadow:0 4px 8px rgba(0,0,0,.35),0 14px 32px -12px rgba(0,0,0,.5)}
+.winner-avatar{width:100%;aspect-ratio:1;object-fit:cover;background:#0c1830;display:block}
+.winner-avatar-placeholder{width:100%;aspect-ratio:1;background:linear-gradient(135deg,#132040,#0c1830);display:flex;align-items:center;justify-content:center;font-size:44px;color:#2e4a68}
 .winner-info{padding:14px 16px}
-.winner-num{font-size:11px;font-weight:700;color:#8a9ab8;letter-spacing:.06em;text-transform:uppercase;margin-bottom:5px}
-.winner-name{font-size:15px;font-weight:700;color:#0d1832;letter-spacing:-.01em;margin-bottom:3px}
-.winner-handle{font-family:'IBM Plex Mono',monospace;font-size:12px;color:#2454d6;margin-bottom:8px}
-.winner-bio{font-size:12px;color:#5c6c8a;line-height:1.5;margin-bottom:6px;word-break:break-word}
-.winner-location{font-size:11.5px;color:#8a9ab8}
-.profile-btn{display:block;margin:10px 16px 14px;padding:9px;background:#eef2fd;border:1.5px solid rgba(36,84,214,.22);border-radius:10px;text-align:center;font-size:13px;font-weight:600;color:#2454d6;text-decoration:none;transition:background .15s}
-.profile-btn:hover{background:#e0e8fb}
+.winner-num{font-size:11px;font-weight:700;color:#3d5a7e;letter-spacing:.06em;text-transform:uppercase;margin-bottom:5px}
+.winner-name{font-size:15px;font-weight:700;color:#e4ecfa;letter-spacing:-.01em;margin-bottom:3px}
+.winner-handle{font-family:'IBM Plex Mono',monospace;font-size:12px;color:#6da4f8;margin-bottom:8px}
+.winner-bio{font-size:12px;color:#6a8ab0;line-height:1.5;margin-bottom:6px;word-break:break-word}
+.winner-location{font-size:11.5px;color:#3d5a7e}
+.profile-btn{display:block;margin:10px 16px 14px;padding:9px;background:rgba(36,84,214,.18);border:1.5px solid rgba(36,84,214,.32);border-radius:10px;text-align:center;font-size:13px;font-weight:600;color:#6da4f8;text-decoration:none;transition:background .15s}
+.profile-btn:hover{background:rgba(36,84,214,.28)}
 /* Fair */
-.fair{background:#fff;border:1px solid #dde8f8;border-radius:14px;padding:18px 20px;margin-bottom:28px;box-shadow:0 1px 3px rgba(15,30,70,.04)}
-.fair-title{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#8a9ab8;margin-bottom:14px;display:flex;align-items:center;gap:7px}
-.fair-title::before{content:'';display:inline-block;width:7px;height:7px;border-radius:50%;background:rgba(36,84,214,.45);box-shadow:0 0 0 2.5px rgba(36,84,214,.14)}
+.fair{background:#132040;border:1px solid rgba(255,255,255,.09);border-radius:14px;padding:18px 20px;margin-bottom:28px;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.fair-title{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#3d5a7e;margin-bottom:14px;display:flex;align-items:center;gap:7px}
+.fair-title::before{content:'';display:inline-block;width:7px;height:7px;border-radius:50%;background:rgba(109,164,248,.55);box-shadow:0 0 0 2.5px rgba(36,84,214,.2)}
 .fair-row{display:flex;align-items:baseline;gap:10px;margin-bottom:8px}
-.fair-key{font-size:10.5px;font-weight:700;color:#8a9ab8;text-transform:uppercase;letter-spacing:.06em;width:52px;flex-shrink:0}
-.fair-val{font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5c6c8a;word-break:break-all;background:#fafcff;padding:5px 8px;border-radius:6px;border:1px solid #dde8f8;flex:1;user-select:all;cursor:pointer}
-.fair-val:hover{border-color:rgba(36,84,214,.3)}
-.fair-hint{font-size:11px;color:#8a9ab8;margin-top:10px;line-height:1.55}
-.fair-hint a{color:#2454d6;text-decoration:none}
+.fair-key{font-size:10.5px;font-weight:700;color:#3d5a7e;text-transform:uppercase;letter-spacing:.06em;width:52px;flex-shrink:0}
+.fair-val{font-family:'IBM Plex Mono',monospace;font-size:10px;color:#6a8ab0;word-break:break-all;background:#080f1e;padding:5px 8px;border-radius:6px;border:1px solid rgba(255,255,255,.08);flex:1;user-select:all;cursor:pointer}
+.fair-val:hover{border-color:rgba(36,84,214,.4)}
+.fair-hint{font-size:11px;color:#3d5a7e;margin-top:10px;line-height:1.55}
+.fair-hint a{color:#6da4f8;text-decoration:none}
 .fair-hint a:hover{text-decoration:underline}
 /* Footer */
-.footer{border-top:1px solid #e6edf8;padding-top:28px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.footer{border-top:1px solid rgba(255,255,255,.08);padding-top:28px;display:flex;align-items:center;justify-content:space-between;gap:16px}
 .footer-logo{height:28px;width:auto;display:block;opacity:.7}
-.footer-text{font-size:12px;color:#8a9ab8}
+.footer-text{font-size:12px;color:#3d5a7e}
 @media(max-width:520px){
   .nav{padding:0 20px}
   .winners{grid-template-columns:1fr 1fr}
@@ -607,29 +607,30 @@ _PAGE_BASE = """<!DOCTYPE html>
 <link href="https://fonts.googleapis.com/css2?family=Epilogue:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{{box-sizing:border-box;margin:0;padding:0}}
-body{{font-family:'Epilogue',-apple-system,sans-serif;background:#fff;color:#0d1832;-webkit-font-smoothing:antialiased;line-height:1.6}}
-a{{color:#2454d6;text-decoration:none}}a:hover{{text-decoration:underline}}
-.nav{{background:#fff;border-bottom:1px solid #e6edf8;padding:0 36px;height:72px;display:flex;align-items:center;position:sticky;top:0;z-index:100}}
+body{{font-family:'Epilogue',-apple-system,sans-serif;background:#0d1829;color:#e4ecfa;-webkit-font-smoothing:antialiased;line-height:1.6}}
+a{{color:#6da4f8;text-decoration:none}}a:hover{{text-decoration:underline}}
+.nav{{background:#0d1829;border-bottom:1px solid rgba(255,255,255,.08);padding:0 36px;height:72px;display:flex;align-items:center;position:sticky;top:0;z-index:100}}
 .nav-logo{{height:48px;width:auto;display:block}}
 .page{{max-width:760px;margin:0 auto;padding:56px 24px 96px}}
-.eyebrow{{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#2454d6;margin-bottom:14px;display:flex;align-items:center;gap:8px}}
-.eyebrow::before{{content:'';width:18px;height:1.5px;background:#2454d6;opacity:.5}}
-h1{{font-size:32px;font-weight:800;letter-spacing:-.025em;margin-bottom:10px}}
-.sub{{font-size:16px;color:#5c6c8a;margin-bottom:48px;line-height:1.65}}
-h2{{font-size:18px;font-weight:700;letter-spacing:-.01em;margin:36px 0 10px}}
+.eyebrow{{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#6da4f8;margin-bottom:14px;display:flex;align-items:center;gap:8px}}
+.eyebrow::before{{content:'';width:18px;height:1.5px;background:#6da4f8;opacity:.5}}
+h1{{font-size:32px;font-weight:800;letter-spacing:-.025em;margin-bottom:10px;color:#e4ecfa}}
+.sub{{font-size:16px;color:#6a8ab0;margin-bottom:48px;line-height:1.65}}
+h2{{font-size:18px;font-weight:700;letter-spacing:-.01em;margin:36px 0 10px;color:#e4ecfa}}
 h2:first-of-type{{margin-top:0}}
-p{{font-size:14.5px;color:#5c6c8a;margin-bottom:14px;line-height:1.75}}
+p{{font-size:14.5px;color:#6a8ab0;margin-bottom:14px;line-height:1.75}}
 ul,ol{{padding-left:22px;margin-bottom:14px}}
-li{{font-size:14.5px;color:#5c6c8a;line-height:1.75;margin-bottom:4px}}
+li{{font-size:14.5px;color:#6a8ab0;line-height:1.75;margin-bottom:4px}}
+strong{{color:#c8d8f0}}
 .card-grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;margin:24px 0 36px}}
-.card{{background:#fafcff;border:1px solid #dde8f8;border-radius:14px;padding:20px 22px}}
+.card{{background:#132040;border:1px solid rgba(255,255,255,.09);border-radius:14px;padding:20px 22px}}
 .card-icon{{font-size:22px;margin-bottom:10px}}
-.card-title{{font-size:14px;font-weight:700;color:#0d1832;margin-bottom:5px}}
-.card-body{{font-size:13px;color:#66768f;line-height:1.6}}
-.pill{{display:inline-flex;align-items:center;gap:6px;background:#eef2fd;color:#1c3aa8;padding:5px 12px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid rgba(36,84,214,.14);margin:3px}}
-.divider{{border:0;border-top:1px solid #e6edf8;margin:36px 0}}
-.footer{{background:#f7f9fd;border-top:1px solid #e0eaf6;padding:32px 36px;text-align:center;font-size:12.5px;color:#8a9ab8;margin-top:auto}}
-.footer a{{color:#66768f}}
+.card-title{{font-size:14px;font-weight:700;color:#e4ecfa;margin-bottom:5px}}
+.card-body{{font-size:13px;color:#4a6a90;line-height:1.6}}
+.pill{{display:inline-flex;align-items:center;gap:6px;background:rgba(36,84,214,.18);color:#93b4f0;padding:5px 12px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid rgba(36,84,214,.28);margin:3px}}
+.divider{{border:0;border-top:1px solid rgba(255,255,255,.08);margin:36px 0}}
+.footer{{background:#08101e;border-top:1px solid rgba(255,255,255,.07);padding:32px 36px;text-align:center;font-size:12.5px;color:#3d5a7e;margin-top:auto}}
+.footer a{{color:#3d5a7e}}
 @media(max-width:520px){{.page{{padding:36px 16px 72px}};h1{{font-size:26px}}}}
 </style>
 </head>
