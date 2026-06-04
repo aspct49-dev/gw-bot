@@ -49,7 +49,7 @@ function TwitterForm({ error, onSubmit }) {
           <div className="checks" style={{ marginTop: 10 }}>
             <Checkbox checked={requireProfilePic} onChange={setRequireProfilePic}>Must have a profile picture</Checkbox>
           </div>
-          <div style={{ display: 'flex', gap: 12 }}>
+          <div className="filter-row">
             <Field label="Min. followers" hint="0 = any">
               <NumberInput value={minFollowers} min={0}
                            onChange={(e) => setMinFollowers(Number(e.target.value) || 0)} />
@@ -326,9 +326,10 @@ function FairProof({ seed, seedHash }) {
 
 /* ─────────────── Kick Giveaway ─────────────── */
 const PUSHER_KEY = '32cbd69e4b950bf97679';
-const SPIN_ITEM_W = 128;
-const SPIN_VISIBLE = 5;
-const SPIN_CENTER = 2;
+const _mobile = typeof window !== 'undefined' && window.innerWidth <= 520;
+const SPIN_ITEM_W = _mobile ? 80 : 128;
+const SPIN_VISIBLE = _mobile ? 3 : 5;
+const SPIN_CENTER = Math.floor(SPIN_VISIBLE / 2);
 
 function KickAvatar({ username, avatarUrl, size }) {
   const [errored, setErrored] = React.useState(false);
@@ -693,7 +694,8 @@ function WheelGiveaway() {
     '#16a34a','#0891b2','#9333ea','#dc2626',
     '#ca8a04','#0d9488','#6366f1','#d97706',
   ];
-  const W = 320, R = 142, CX = 160, CY = 160;
+  const W = typeof window !== 'undefined' && window.innerWidth <= 520 ? 260 : 320;
+  const R = Math.round(W * 0.444), CX = W / 2, CY = W / 2;
 
   const [entries, setEntries] = React.useState([]);
   const [inputVal, setInputVal] = React.useState('');

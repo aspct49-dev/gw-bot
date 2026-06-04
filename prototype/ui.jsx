@@ -38,7 +38,27 @@ function WheelNavIcon() {
   );
 }
 
-function Nav({ active, onSelect }) {
+function ThemeToggle({ theme, onToggle }) {
+  return (
+    <button className="theme-toggle" onClick={onToggle} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} aria-label="Toggle dark mode">
+      {theme === 'dark' ? (
+        <svg width="17" height="17" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+          <circle cx="9" cy="9" r="3.5" />
+          <line x1="9" y1="1" x2="9" y2="3" /><line x1="9" y1="15" x2="9" y2="17" />
+          <line x1="1" y1="9" x2="3" y2="9" /><line x1="15" y1="9" x2="17" y2="9" />
+          <line x1="3.2" y1="3.2" x2="4.5" y2="4.5" /><line x1="13.5" y1="13.5" x2="14.8" y2="14.8" />
+          <line x1="14.8" y1="3.2" x2="13.5" y2="4.5" /><line x1="4.5" y1="13.5" x2="3.2" y2="14.8" />
+        </svg>
+      ) : (
+        <svg width="17" height="17" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M15.5 11.5A7 7 0 1 1 6.5 2.5a5 5 0 0 0 9 9z" />
+        </svg>
+      )}
+    </button>
+  );
+}
+
+function Nav({ active, onSelect, theme, onToggleTheme }) {
   return (
     <header className="nav">
       <div className="nav-inner">
@@ -48,26 +68,28 @@ function Nav({ active, onSelect }) {
         <nav className="nav-links">
           <button className="nav-link" data-active={active === 'twitter' ? '1' : '0'}
                   onClick={() => onSelect('twitter')}>
-            <img className="nav-link-ico" src="icon-x.png" alt="" />
-            X Picker
+            <img className="nav-link-ico ico-x" src="icon-x.png" alt="" />
+            <span className="nav-lbl">X Picker</span>
           </button>
           <button className="nav-link" data-active={active === 'youtube' ? '1' : '0'}
                   onClick={() => onSelect('youtube')}>
             <img className="nav-link-ico" src="icon-youtube.png" alt="" />
-            YouTube Picker
+            <span className="nav-lbl">YouTube Picker</span>
           </button>
           <button className="nav-link" data-active={active === 'kick' ? '1' : '0'}
                   onClick={() => onSelect('kick')}>
             <KickNavIcon />
-            Kick Giveaway
+            <span className="nav-lbl">Kick Giveaway</span>
           </button>
           <button className="nav-link" data-active={active === 'wheel' ? '1' : '0'}
                   onClick={() => onSelect('wheel')}>
             <WheelNavIcon />
-            Wheel
+            <span className="nav-lbl">Wheel</span>
           </button>
         </nav>
-        <div className="nav-right" />
+        <div className="nav-right">
+          <ThemeToggle theme={theme} onToggle={onToggleTheme} />
+        </div>
       </div>
     </header>
   );

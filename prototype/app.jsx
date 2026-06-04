@@ -1,6 +1,6 @@
 // app.jsx — root: flow, theme vars, loading, tweaks.
 
-const { useState: useS, useRef: useR } = React;
+const { useState: useS, useRef: useR, useEffect: useE } = React;
 
 function WheelHeroIcon() {
   const colors = ['#2454d6','#7c3aed','#db2777','#ea580c','#16a34a','#0891b2'];
@@ -32,6 +32,15 @@ function App() {
   const [twData, setTwData] = useS(null);
   const [ytData, setYtData] = useS(null);
   const abortRef = useR(null);
+
+  const [theme, setTheme] = useS(() => {
+    try { return localStorage.getItem('drawr-theme') || 'light'; } catch { return 'light'; }
+  });
+  useE(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    try { localStorage.setItem('drawr-theme', theme); } catch {}
+  }, [theme]);
+  const toggleTheme = () => setTheme(t => t === 'dark' ? 'light' : 'dark');
 
   const tab = screen.startsWith('youtube') ? 'youtube' : screen.startsWith('kick') ? 'kick' : screen.startsWith('wheel') ? 'wheel' : 'twitter';
 
@@ -230,11 +239,11 @@ function App() {
 
   return (
     <div className="page">
-      <Nav active={tab} onSelect={goTab} />
+      <Nav active={tab} onSelect={goTab} theme={theme} onToggleTheme={toggleTheme} />
       <main className="main">
         {showHero && (
           <div className="hero">
-            {tab === 'wheel' ? <WheelHeroIcon /> : <img className="hero-icon" src={heroIconSrc} alt="" />}
+            {tab === 'wheel' ? <WheelHeroIcon /> : <img className={`hero-icon${tab === 'twitter' ? ' ico-x' : ''}`} src={heroIconSrc} alt="" />}
             <h1 className="hero-title">PICK A WINNER</h1>
             <p className="hero-sub">{heroSub}</p>
           </div>
